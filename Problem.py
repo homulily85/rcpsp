@@ -14,20 +14,14 @@ class Problem:
         self.predecessors = [[] for _ in range(self.njobs)]
         # Duration for each activity
         self.durations = [instance.activities[i].modes[0].duration for i in range(self.njobs)]
-        # Request per time step, per resource, per activity
-        self.requests = [
-            [[instance.activities[job_no].modes[0].demands[res_no] for _ in
-              range(self.durations[job_no])] for res_no in
-             range(self.nresources)] for job_no in range(self.njobs)]
-        # Capacity for each time step, per resource
-        self.capacities = [[instance.resources[res_no].capacity for _ in range(10)] for res_no in
-                           range(instance.num_resources)]
+        # Request per resource, per activity
+        self.requests = [instance.activities[i].modes[0].demands for i in range(self.njobs)]
+        # Capacity for each per resource
+        self.capacities = [instance.resources[i].capacity for i in range(self.nresources)]
 
+        self.generate_predecessors()
+
+    def generate_predecessors(self):
         for i in range(self.njobs):
             for j in self.successors[i]:
                 self.predecessors[j].append(i)
-
-
-p = Problem('j301_1.sm')
-
-print(p)

@@ -21,16 +21,16 @@ class PBConstr:
         if not cnf:
             return
 
-        max = -1
+        M = -1
         for clause in cnf:
             for var in clause:
-                if abs(var) > max:
-                    max = abs(var)
+                if abs(var) > M:
+                    M = abs(var)
 
-        if max == -1:
+        if M == -1:
             return
 
-        self.model.nvariable = max
+        self.model.nvariable = max(M, self.model.nvariable)
         self.model.clauses.extend(cnf)
 
     def number_of_term(self) -> int:

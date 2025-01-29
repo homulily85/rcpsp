@@ -1,10 +1,15 @@
 import os.path
+import signal
 
 from pysat.solvers import Glucose3
 import csv
 from Encoder import Encoder
 from Problem import Problem
 import timeit
+
+
+class TimeoutException(Exception):  # Custom exception class
+    pass
 
 
 def solver(file_name: str, output_name: str, lb: int, ub: int):
@@ -81,7 +86,22 @@ def benchmark(name: str):
     with open(f'makespan_{name}.csv', encoding='utf8') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
         for row in csv_reader:
-            solver(f'{name}/{row[0]}', output_name, int(row[1]), int(row[2]))
+
+            def timeout_handler(signum, frame):  # Custom signal handler
+                with open(output_name, "a+") as f:
+                    f.write(f'{file_name},,,0,,time out\n')
+                    f.close()
+                raise TimeoutException
+
+            file_name = f'{name}/{row[0]}'
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(1)
+            try:
+                solver(file_name, output_name, int(row[1]), int(row[2]))
+            except TimeoutException:
+                continue
+            else:
+                signal.alarm(0)
 
         stop = timeit.default_timer()
         csv_file.close()

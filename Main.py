@@ -1,3 +1,5 @@
+import os.path
+
 from pysat.solvers import Glucose3
 import csv
 from Encoder import Encoder
@@ -5,36 +7,87 @@ from Problem import Problem
 import timeit
 
 
-def solver(file_name: str, makespan: int):
+def solver(file_name: str, output_name: str, lb: int, ub: int):
     start = timeit.default_timer()
-    p = Problem(f'j30.sm/{file_name}')
+    p = Problem(file_name)
 
-    e = Encoder(p, makespan, makespan)
-    e.encode()
-    solver = Glucose3()
-    for c in e.sat_model.clauses:
-        solver.add_clause(c)
+    tmp = {'makespan': ub + 1, 'nvar': -1, 'nclause': -1}
 
-    t = solver.solve()
+    for i in range(ub, lb - 1, -1):
+        try:
+            e = Encoder(p, i, ub)
+            e.encode()
+        except Exception:
+            stop = timeit.default_timer()
+            with open(output_name, "a+") as f:
+                f.write(
+                    f'{file_name},'
+                    f'{'' if tmp['nvar'] == -1 else tmp['nvar']},'
+                    f'{'' if tmp['nclause'] == -1 else tmp['nclause']},'
+                    f'{0 if tmp['nvar'] == -1 else 1},'
+                    f'{'' if tmp['nvar'] == -1 else tmp['makespan']},'
+                    f'{round(stop - start, 5)}\n')
+                f.close()
+                return
 
-    stop = timeit.default_timer()
+        solver = Glucose3()
+        for c in e.sat_model.clauses:
+            solver.add_clause(c)
 
-    if t:
-        with open("file.txt", "a") as f:
-            f.write(f'{file_name} is feasible in {round(stop - start, 2)}s\n')
-    else:
-        print(f'{file_name} is not feasible')
-        exit(1)
+        t = solver.solve()
+
+        if t:
+            if i == lb:
+                stop = timeit.default_timer()
+                with open(output_name, "a+") as f:
+                    f.write(
+                        f'{file_name},'
+                        f'{e.sat_model.nvariable},'
+                        f'{len(e.sat_model.clauses)},'
+                        f'1,'
+                        f'{e.makespan},'
+                        f'{round(stop - start, 5)}\n')
+                    f.close()
+            else:
+                tmp['makespan'] = i
+                tmp['nvar'] = e.sat_model.nvariable
+                tmp['nclause'] = len(e.sat_model.clauses)
+        else:
+            stop = timeit.default_timer()
+            with open(output_name, "a+") as f:
+                f.write(
+                    f'{file_name},'
+                    f'{'' if tmp['nvar'] == -1 else tmp['nvar']},'
+                    f'{'' if tmp['nclause'] == -1 else tmp['nclause']},'
+                    f'{0 if tmp['nvar'] == -1 else 1},'
+                    f'{'' if tmp['nvar'] == -1 else tmp['makespan']},'
+                    f'{round(stop - start, 5)}\n')
+                f.close()
+                return
+
+
+def benchmark(name: str):
+    output_name = f'result_{name}.csv'
+    try:
+        os.remove(output_name)
+    except OSError:
+        pass
+
+    start = timeit.default_timer()
+    with open(output_name, "a+") as f:
+        f.write('file_name,num_var,num_clause,feasible,make_span,solve_time\n')
+        f.close()
+
+    with open(f'makespan_{name}.csv', encoding='utf8') as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        for row in csv_reader:
+            solver(f'{name}/{row[0]}', output_name, int(row[1]), int(row[2]))
+
+        stop = timeit.default_timer()
+        csv_file.close()
+
+        print(f'Total running time for {name}: {round(stop - start, 5)}s')
 
 
 if __name__ == '__main__':
-    start = timeit.default_timer()
-
-    with open('makespan.csv', encoding='utf8') as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        for row in csv_reader:
-            solver(row[0], int(row[1]))
-
-    stop = timeit.default_timer()
-
-    print(f'Total running time: {round(stop - start, 2)}s')
+    benchmark('j30.sm')

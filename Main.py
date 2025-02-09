@@ -4,7 +4,7 @@ import os.path
 
 from pysat.solvers import Glucose3
 import csv
-from Encoder import Encoder
+from Encoder import Encoder, PreprocessingFailed
 from Problem import Problem
 import timeit
 
@@ -19,9 +19,10 @@ def solver(file_name: str, output_name: str, lb: int, ub: int):
 
     for i in range(ub, lb - 1, -1):
         try:
-            e = Encoder(p, i, ub)
+            e = Encoder(p, i)
             e.encode()
-        except KeyError:
+
+        except (KeyError, PreprocessingFailed):
             stop = timeit.default_timer()
             with open(output_name, "a+") as f:
                 f.write(
@@ -74,6 +75,7 @@ def benchmark(name: str):
     start = timeit.default_timer()
 
     output_name = f'result_{name}.csv'
+    log = f'{name}.log'
     try:
         os.remove(output_name)
     except OSError:
@@ -83,11 +85,13 @@ def benchmark(name: str):
         f.write('file_name,num_var,num_clause,feasible,make_span,solve_time\n')
         f.close()
 
-    with open(f'makespan_{name}.csv', encoding='utf8') as csv_file:
+    with open(f'bound_{name}.csv', encoding='utf8') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
         for row in csv_reader:
             file_name = f'{name}/{row[0]}'
-            print(f'{datetime.datetime.now()}:Running {file_name}')
+            with open(log, "a+") as f:
+                f.write(f'{datetime.datetime.now()}:Running {file_name}\n')
+                f.close()
             p = multiprocessing.Process(target=solver,
                                         args=(file_name, output_name, int(row[1]), int(row[2])))
             p.start()
@@ -105,4 +109,6 @@ def benchmark(name: str):
 
 
 if __name__ == '__main__':
+    # multiprocessing.Process(target=benchmark, args=('j60.sm',)).start()
+    # multiprocessing.Process(target=benchmark, args=('j90.sm',)).start()
     benchmark('j30.sm')

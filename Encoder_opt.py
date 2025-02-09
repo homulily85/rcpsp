@@ -90,11 +90,13 @@ class Encoder:
         # Job 0 starts at 0 (10)
         self.sat_model.clauses.extend(self.encode_constraint_10())
 
-        # Precedence clauses (11)
-        self.sat_model.clauses.extend(self.encode_constraint_11())
-
+        # # Precedence clauses (11)
+        # self.sat_model.clauses.extend(self.encode_constraint_11())
+        #
         # Start clauses (12)
-        self.sat_model.clauses.extend(self.encode_constraint_12())
+        # self.sat_model.clauses.extend(self.encode_constraint_12())
+
+        self.sat_model.clauses.extend(self.encode_constraint_11_new())
 
         # Consistency clauses (13)
         self.sat_model.clauses.extend(self.encode_constraint_13())
@@ -104,6 +106,107 @@ class Encoder:
 
         # Add resource constraints(15)
         self.encode_constraint_15()
+
+    def encode_constraint_11(self) -> list[list[int]]:
+        clauses = []
+        for i in range(1, self.problem.njobs):
+            for j in self.problem.predecessors[i]:
+                for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
+                    clause = [-self.y[(i, s)]]
+
+                    t = self.ES[j]
+                    while t <= s - self.problem.durations[j] and t <= self.LS[j]:
+                        clause.append(self.y[(j, t)])
+                        t += 1
+
+                    clauses.append(clause)
+        return clauses
+
+    def encode_constraint_12(self) -> list[list[int]]:
+        clauses = []
+        for i in range(0, self.problem.njobs):
+            clause = []
+            for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
+                # print(f'y{i}{s}',end=' ')
+                clause.append(self.y[(i, s)])
+            clauses.append(clause)
+            # print()
+        return clauses
+
+    @staticmethod
+    def AMO_binomial(var: list[int]):
+        if len(var) == 0:
+            return []
+        elif len(var) == 1:
+            return [[var[0]]]
+
+        clauses = []
+        for i in range(len(var)):
+            for j in range(i + 1, len(var)):
+                clauses.append([-var[i], -var[j]])
+        return clauses
+
+    @staticmethod
+    def ALO_binomial(var: list[int]):
+        return [var]
+
+    @staticmethod
+    def EXO(var: list[int]):
+
+        t = Encoder.AMO_binomial(var)
+        t.extend((Encoder.ALO_binomial(var)))
+        return t
+
+    @staticmethod
+    def AMZ(var: list[int]):
+        return [[-i] for i in var]
+
+    def encode_constraint_11_new(self):
+        clauses = []
+
+        for j in range(1, self.problem.njobs):
+            for i in self.problem.successors[j]:
+                # for t in range(self.ES[j], self.LS[j] + 1):
+                #     print(f'y{j}{t}', end=' ')
+                # print('=1')
+                clauses.extend(Encoder.EXO([
+                    self.y[j, t] for t in range(self.ES[j], self.LS[j] + 1)
+                ]))
+
+                amz = [self.y[i, t] for t in
+                       range(self.ES[i], self.ES[j] + self.problem.durations[j])
+                       ]
+                if len(amz) > 0:
+                    clauses.extend(Encoder.AMZ(amz))
+
+                # for t in range(self.ES[i], self.ES[j] + self.problem.durations[j]):
+                #     print(f'y{i}{t}', end=' ')
+                # print('=0')
+
+                x = max(self.ES[j] + self.problem.durations[j], self.ES[i])
+
+                for t in range(x, self.LS[i] + 1):
+                    temp = [self.y[j, k] for k in
+                            range(t - self.problem.durations[j] + 1, self.LS[j] + 1)]
+                    if len(temp) == 0:
+                        continue
+
+                    # for k in range(x, t + 1):
+                    #     print(f'y{i}{k}', end=' ')
+                    temp.extend([self.y[i, k] for k in range(x, t + 1)])
+                    # for k in range(t - self.problem.durations[j] + 1, self.LS[j] + 1):
+                    #     print(f'y{j}{k}', end=' ')
+                    # print('<=1')
+                    clauses.extend(Encoder.AMO_binomial(temp))
+
+                clauses.extend(Encoder.EXO(
+                    [self.y[i, t] for t in range(self.ES[i], self.LS[i] + 1)]
+                ))
+                # for t in range(self.ES[i], self.LS[i] + 1):
+                #     print(f'y{i}{t}', end=' ')
+                # print('=1')
+
+        return clauses
 
     def encode_constraint_15(self):
         for t in range(self.makespan):
@@ -132,31 +235,6 @@ class Encoder:
                     clauses.append(
                         [-self.y[(i, s)], self.x[(i, t)]])
 
-        return clauses
-
-    def encode_constraint_12(self) -> list[list[int]]:
-        clauses = []
-        for i in range(1, self.problem.njobs):
-            clause = []
-            for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
-                clause.append(self.y[(i, s)])
-            clauses.append(clause)
-
-        return clauses
-
-    def encode_constraint_11(self) -> list[list[int]]:
-        clauses = []
-        for i in range(1, self.problem.njobs):
-            for j in self.problem.predecessors[i]:
-                for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
-                    clause = [-self.y[(i, s)]]
-
-                    t = self.ES[j]
-                    while t <= s - self.problem.durations[j] and t <= self.LS[j]:
-                        clause.append(self.y[(j, t)])
-                        t += 1
-
-                    clauses.append(clause)
         return clauses
 
     def encode_constraint_10(self) -> list[list[int]]:

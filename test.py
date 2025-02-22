@@ -22,9 +22,9 @@ from encoder.new_encoder_optimize import Encoder
 from encoder.problem import Problem
 
 # p = Problem('data_set/j30.sm/j301_1.sm')
-p =Problem('data_set_test/test_2020.sm')
+p = Problem('data_set_test/test_2022.sm')
 
-e = Encoder(p, 8)
+e = Encoder(p, 5)
 for j in range(e.problem.njobs):
     print(
         f'Job {j}: ES{j} = {e.ES[j]}, LS{j} = {e.LS[j]}, EC{j} = {e.EC[j]}, LC{j} = {e.LC[j]},'
@@ -40,6 +40,34 @@ print(len(e.sat_model.clauses))
 t = solver.solve()
 print(t)
 model = solver.get_model()
-a  = e.get_result(model)
+a = e.get_result(model)
 for i in range(len(a)):
     print(f'Job {i}: {a[i]}')
+
+
+def verify(encoder: Encoder, model: list[int]):
+    # Get start time
+    start_time = encoder.get_result(model)
+
+    # Check precedence constraint
+    for activity in range(encoder.problem.njobs):
+        for successor in encoder.problem.successors[activity]:
+            if start_time[successor] < start_time[activity] + encoder.problem.durations[activity]:
+                print(f"Failed when checking precedence constraint for {activity} ->{successor}")
+                exit(-1)
+    # Checking resource constraint
+    for t in range(start_time[-1] + 1):
+        total_request = [0 for _ in range(encoder.problem.nresources)]
+        for activity in range(encoder.problem.njobs):
+            if start_time[activity] <= t <= start_time[activity] + e.problem.durations[
+                activity] - 1:
+                for r in range(e.problem.njobs):
+                    total_request += e.problem.requests[r]
+
+        for r in range(encoder.problem.nresources):
+            if total_request[r] > encoder.problem.capacities[r]:
+                print(f"Failed when check resource constraint for resource {r} at t = {t}")
+                exit(-1)
+
+
+verify(e, model)

@@ -31,68 +31,88 @@ def benchmark(name: str, encoder_type: EncoderType):
         case EncoderType.NEW_OPT:
             from encoder.new_encoder_optimize import Encoder, PreprocessingFailed
 
-    def solver(file_name: str, output_name: str, lb: int, ub: int):
-        start = timeit.default_timer()
+    # file_name, num_var, num_clause, feasible, make_span, total_encoding_time, total_solving_time, optimized
+
+    class InfoAttribute(Enum):
+        NUM_VAR = 0
+        NUM_CLAUSE = 1
+        FEASIBLE = 2
+        MAKE_SPAN = 3
+        TOTAL_ENCODING_TIME = 4
+        TOTAL_SOLVING_TIME = 5
+        OPTIMIZED = 6
+
+    queue = multiprocessing.Queue()
+
+    def solver(file_name: str, lb: int, ub: int, q=queue):
         p = Problem(file_name)
+        result_info = [0, 0, False, 0, 0, 0, False]
 
-        # Used to stored previous result
-        tmp = {'makespan': ub + 1, 'nvar': -1, 'nclause': -1}
+        q.put(result_info)
 
+        total_encoding_time = 0
+        total_solving_time = 0
+
+        start_encoding_time = 0
         for i in range(ub, lb - 1, -1):
             try:
+                start_encoding_time = timeit.default_timer()
                 e = Encoder(p, i)
                 e.encode()
-
-            except (PreprocessingFailed):
-                stop = timeit.default_timer()
-                with open(output_name, "a+") as f:
-                    f.write(
-                        f'{file_name},'
-                        f'{'' if tmp['nvar'] == -1 else tmp['nvar']},'
-                        f'{'' if tmp['nclause'] == -1 else tmp['nclause']},'
-                        f'{0 if tmp['nvar'] == -1 else 1},'
-                        f'{'' if tmp['nvar'] == -1 else tmp['makespan']},'
-                        f'{round(stop - start, 5)}\n')
-                    f.close()
-                    return
+                stop_encoding_time = timeit.default_timer()
+                total_encoding_time += (stop_encoding_time - start_encoding_time)
+                q.get()
+                q.put(result_info)
+            except PreprocessingFailed:
+                stop_encoding_time = timeit.default_timer()
+                total_encoding_time += (stop_encoding_time - start_encoding_time)
+                result_info[
+                    InfoAttribute.TOTAL_ENCODING_TIME.value] = total_encoding_time
+                return
 
             solver = Glucose3()
             for c in e.sat_model.clauses:
                 solver.add_clause(c)
 
-            model = solver.solve()
+            start_solving_time = timeit.default_timer()
+            sat = solver.solve()
+            stop_solving_time = timeit.default_timer()
+            total_solving_time += (stop_solving_time - start_solving_time)
 
-            if model:
+
+            result_info[InfoAttribute.TOTAL_ENCODING_TIME.value] = total_encoding_time
+            result_info[InfoAttribute.TOTAL_SOLVING_TIME.value] = total_solving_time
+
+            if sat:
+                result_info[InfoAttribute.NUM_VAR.value] = e.sat_model.number_of_variable
+                result_info[InfoAttribute.NUM_CLAUSE.value] = len(e.sat_model.clauses)
+                result_info[InfoAttribute.MAKE_SPAN.value] = i
+                result_info[InfoAttribute.FEASIBLE.value] = True
+
                 if i == lb:
-                    stop = timeit.default_timer()
-                    with open(output_name, "a+") as f:
-                        f.write(
-                            f'{file_name},'
-                            f'{e.sat_model.number_of_variable},'
-                            f'{len(e.sat_model.clauses)},'
-                            f'1,'
-                            f'{e.makespan},'
-                            f'{round(stop - start, 5)}\n')
-                        f.close()
+                    result_info[InfoAttribute.OPTIMIZED.value] = True
+                    q.get()
+                    q.put(result_info)
                 else:
-                    tmp['makespan'] = i
-                    tmp['nvar'] = e.sat_model.number_of_variable
-                    tmp['nclause'] = len(e.sat_model.clauses)
+                    q.get()
+                    q.put(result_info)
             else:
-                stop = timeit.default_timer()
-                with open(output_name, "a+") as f:
-                    f.write(
-                        f'{file_name},'
-                        f'{'' if tmp['nvar'] == -1 else tmp['nvar']},'
-                        f'{'' if tmp['nclause'] == -1 else tmp['nclause']},'
-                        f'{0 if tmp['nvar'] == -1 else 1},'
-                        f'{'' if tmp['nvar'] == -1 else tmp['makespan']},'
-                        f'{round(stop - start, 5)}\n')
-                    f.close()
-                    return
+                result_info[InfoAttribute.OPTIMIZED.value] = True
+                q.get()
+                q.put(result_info)
+                return
 
     with open(output_name, "a+") as f:
-        f.write('file_name,num_var,num_clause,feasible,make_span,solve_time\n')
+        f.write(
+            'file_name,'
+            'num_var,'
+            'num_clause,'
+            'feasible,'
+            'make_span,'
+            'total_encoding_time,'
+            'total_solving_time,'
+            'optimized,'
+            'timeout\n')
         f.close()
 
     with open(f'bound/bound_{name}.csv', encoding='utf8') as csv_file:
@@ -103,13 +123,29 @@ def benchmark(name: str, encoder_type: EncoderType):
                 f.write(f'{datetime.datetime.now()}\t {file_name} started\n')
                 f.close()
             p = multiprocessing.Process(target=solver,
-                                        args=(file_name, output_name, int(row[1]), int(row[2])))
+                                        args=(file_name, int(row[1]), int(row[2])))
             p.start()
             p.join(TIME_LIMIT)
+            result_info = queue.get()
+
+            with open(output_name, "a+") as f:
+                f.write(f'{file_name},'
+                        f'{result_info[InfoAttribute.NUM_VAR.value]},'
+                        f'{result_info[InfoAttribute.NUM_CLAUSE.value]},'
+                        f'{result_info[InfoAttribute.FEASIBLE.value]},'
+                        f'{result_info[InfoAttribute.MAKE_SPAN.value]},'
+                        f'{round(result_info[InfoAttribute.TOTAL_ENCODING_TIME.value], 5)},'
+                        f'{round(result_info[InfoAttribute.TOTAL_SOLVING_TIME.value], 5)},'
+                        f'{result_info[InfoAttribute.OPTIMIZED.value]},')
+                f.close()
             if p.is_alive():
                 p.kill()
                 with open(output_name, "a+") as f:
-                    f.write(f'{file_name},,,0,,time out\n')
+                    f.write(f'True\n')
+                    f.close()
+            else:
+                with open(output_name, "a+") as f:
+                    f.write(f'False\n')
                     f.close()
 
         stop = timeit.default_timer()
@@ -124,4 +160,5 @@ def benchmark(name: str, encoder_type: EncoderType):
 if __name__ == '__main__':
     # multiprocessing.Process(target=benchmark, args=('j60.sm',)).start()
     # multiprocessing.Process(target=benchmark, args=('j90.sm',)).start()
-    benchmark('j30.sm', EncoderType.NEW_OPT)
+    benchmark('j60.sm', EncoderType.NEW_OPT)
+    # benchmark('j30.sm', EncoderType.ORIGINAL)

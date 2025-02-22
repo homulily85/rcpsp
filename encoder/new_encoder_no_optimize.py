@@ -125,10 +125,6 @@ class Encoder:
         t.extend((Encoder._ALO_binomial(var)))
         return t
 
-    @staticmethod
-    def _AMZ(var: list[int]):
-        return [[-i] for i in var]
-
     def _encode_new_precedence_constraint(self):
         clauses = []
 
@@ -141,11 +137,12 @@ class Encoder:
                     self.y[j, t] for t in range(self.ES[j], self.LS[j] + 1)
                 ]))
 
-                amz = [self.y[i, t] for t in
-                       range(self.ES[i], self.ES[j] + self.problem.durations[j])
-                       ]
-                if len(amz) > 0:
-                    clauses.extend(Encoder._AMZ(amz))
+                # I don't know why, but we can remove AMZ constraint
+                # amz = [self.y[i, t] for t in
+                #        range(self.ES[i], self.ES[j] + self.problem.durations[j])
+                #        ]
+                # if len(amz) > 0:
+                #     clauses.extend(Encoder._AMZ(amz))
 
                 # for t in range(self.ES[i], self.ES[j] + self.problem.durations[j]):
                 #     print(f'y{i}{t}', end=' ')
@@ -168,7 +165,8 @@ class Encoder:
                     clauses.extend(Encoder._AMO_binomial(temp))
 
                 clauses.extend(Encoder._EXO(
-                    [self.y[i, t] for t in range(self.ES[i], self.LS[i] + 1)]
+                    [self.y[i, t] for t in
+                     range(max(self.ES[i], self.ES[j] + self.problem.durations[j]), self.LS[i] + 1)]
                 ))
                 # for t in range(self.ES[i], self.LS[i] + 1):
                 #     print(f'y{i}{t}', end=' ')

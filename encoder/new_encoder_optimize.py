@@ -25,6 +25,8 @@ class Encoder:
         # Variable x_(i,t): boolean representing whether activity i is running at time t in RTW(i)
         self.x: dict[tuple[int, int], int] = {}
 
+        self.register: dict[tuple[int, ...], int] = {}
+
         self._preprocessing()
 
     def _preprocessing(self):
@@ -88,53 +90,21 @@ class Encoder:
 
     def encode(self):
         # Job 0 starts at 0 (10)
-        self.sat_model.clauses.extend(self.encode_constraint_10())
+        self.sat_model.clauses.extend(self._encode_constraint_10())
 
-        # # Precedence clauses (11)
-        # self.sat_model.clauses.extend(self.encode_constraint_11())
-        #
-        # Start clauses (12)
-        # self.sat_model.clauses.extend(self.encode_constraint_12())
-
-        self.sat_model.clauses.extend(self.encode_constraint_11_new())
+        self._encode_new_precedence_constraint()
 
         # Consistency clauses (13)
-        self.sat_model.clauses.extend(self.encode_constraint_13())
+        self.sat_model.clauses.extend(self._encode_constraint_13())
 
         # Add redundant clauses that should improve runtime (14)
-        self.sat_model.clauses.extend(self.encode_constraint_14())
+        self.sat_model.clauses.extend(self._encode_constraint_14())
 
         # Add resource constraints(15)
-        self.encode_constraint_15()
-
-    def encode_constraint_11(self) -> list[list[int]]:
-        clauses = []
-        for i in range(1, self.problem.njobs):
-            for j in self.problem.predecessors[i]:
-                for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
-                    clause = [-self.y[(i, s)]]
-
-                    t = self.ES[j]
-                    while t <= s - self.problem.durations[j] and t <= self.LS[j]:
-                        clause.append(self.y[(j, t)])
-                        t += 1
-
-                    clauses.append(clause)
-        return clauses
-
-    def encode_constraint_12(self) -> list[list[int]]:
-        clauses = []
-        for i in range(0, self.problem.njobs):
-            clause = []
-            for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
-                # print(f'y{i}{s}',end=' ')
-                clause.append(self.y[(i, s)])
-            clauses.append(clause)
-            # print()
-        return clauses
+        self._encode_constraint_15()
 
     @staticmethod
-    def AMO_binomial(var: list[int]):
+    def _AMO_binomial(var: list[int]):
         if len(var) == 0:
             return []
         elif len(var) == 1:
@@ -147,83 +117,93 @@ class Encoder:
         return clauses
 
     @staticmethod
-    def ALO_binomial(var: list[int]):
+    def _ALO_binomial(var: list[int]):
         return [var]
 
     @staticmethod
-    def EXO(var: list[int]):
+    def _EXO(var: list[int]):
 
-        t = Encoder.AMO_binomial(var)
-        t.extend((Encoder.ALO_binomial(var)))
+        t = Encoder._AMO_binomial(var)
+        t.extend((Encoder._ALO_binomial(var)))
         return t
 
-    @staticmethod
-    def AMZ(var: list[int]):
-        return [[-i] for i in var]
-
-    def encode_constraint_11_new(self):
-        clauses = []
-
+    def _encode_new_precedence_constraint(self):
         for j in range(1, self.problem.njobs):
             for i in self.problem.successors[j]:
-                pre = []
-                # for t in range(self.ES[j], self.LS[j] + 1):
-                #     print(f'y{j}{t}', end=' ')
-                # print('=1')
-                # EXO
-                pre.append([
+                m = max(self.ES[j] + self.problem.durations[j], self.ES[i])
+
+                self.sat_model.clauses.append(
+                    [self.y[i, t] for t in range(m, self.LS[i] + 1)]
+                )
+
+                temp: list[int] = []
+
+                for k in range(m, self.LS[i] + 1):
+                    # Linking subset to auxiliary variable
+                    temp.append(self.y[i, k])
+                    current = tuple(temp)
+                    if current not in self.register:
+                        self.register[current] = self.sat_model.get_new_var()
+
+                        # print(f'{current}->{self.register[current]}')
+                        # for x in range(m, k + 1):
+                            # print(f'y{i}{x}', end=' ')
+                        # print(f'-->{self.register[current]}')
+                        # Constraint for staircase
+                        self.sat_model.clauses.append([-self.y[i, k], self.register[current]])
+                        # print(f'-y{i}{k} {self.register[current]}')
+                        if k != m:
+                            previous = tuple(temp[:len(temp) - 1])
+                            self.sat_model.clauses.append(
+                                [-self.register[previous], self.register[current]])
+                            # print(f'-{self.register[previous]} {self.register[current]}')
+                            self.sat_model.clauses.append(
+                                [self.register[previous], self.y[i, k], -self.register[current]])
+                            # print(f'{self.register[previous]} y{i}{k} -{self.register[current]}')
+                            self.sat_model.clauses.append([-self.y[i, k], -self.register[previous]])
+                            # print(f'-y{i}{k} -{self.register[previous]}')
+
+                self.sat_model.clauses.append([
                     self.y[j, t] for t in range(self.ES[j], self.LS[j] + 1)
                 ])
 
-                amz = [self.y[i, t] for t in
-                       range(self.ES[i], self.ES[j] + self.problem.durations[j])
-                       ]
-                if len(amz) > 0:
-                    clauses.extend(Encoder.AMZ(amz))
+                temp = []
+                for k in range(self.LS[j], self.ES[j] - 1, -1):
+                    temp.append(self.y[j, k])
+                    current = tuple(temp)
+                    if current not in self.register:
+                        self.register[current] = self.sat_model.get_new_var()
 
-                # for t in range(self.ES[i], self.ES[j] + self.problem.durations[j]):
-                #     print(f'y{i}{t}', end=' ')
-                # print('=0')
+                        # for x in range(self.LS[j], k - 1, -1):
+                        #     print(f'y{j}{x}', end=' ')
+                        # print(f'-->{self.register[current]}')
 
-                x = max(self.ES[j] + self.problem.durations[j], self.ES[i])
+                        self.sat_model.clauses.append([-self.y[j, k], self.register[current]])
 
-                for t in range(x, self.LS[i] + 1):
-                    temp = [self.y[j, k] for k in
-                            range(t - self.problem.durations[j] + 1, self.LS[j] + 1)]
-                    if len(temp) == 0:
+                        if k != self.LS[j]:
+                            previous = tuple(temp[:len(temp) - 1])
+                            self.sat_model.clauses.append(
+                                [-self.register[previous], self.register[current]])
+                            self.sat_model.clauses.append(
+                                [self.register[previous], self.y[j, k], -self.register[current]])
+                            self.sat_model.clauses.append([-self.y[j, k], -self.register[previous]])
+
+                for t in range(m, self.LS[i] + 1):
+                    first_half_temp = list(self.y[j, k] for k in
+                                           range(t - self.problem.durations[j] + 1, self.LS[j] + 1))
+
+                    if len(first_half_temp) == 0:
                         continue
 
-                    # for k in range(x, t + 1):
-                    #     print(f'y{i}{k}', end=' ')
+                    first_half_temp.reverse()
+                    first_half = tuple(first_half_temp)
 
-                    temp.extend([self.y[i, k] for k in range(x, t + 1)])
-                    # for k in range(t - self.problem.durations[j] + 1, self.LS[j] + 1):
-                    #     print(f'y{j}{k}', end=' ')
-                    # print('<=1')
-                    pre.append(temp)
+                    second_half = tuple(self.y[i, k] for k in range(m, t + 1))
 
-                # EXO
-                pre.append(
-                    [self.y[i, t] for t in range(self.ES[i], self.LS[i] + 1)]
-                )
-                # for t in range(self.ES[i], self.LS[i] + 1):
-                #     print(f'y{i}{t}', end=' ')
-                # print('=1')
-                print(pre)
+                    self.sat_model.clauses.append(
+                        [-self.register[first_half], -self.register[second_half]])
 
-        return clauses
-
-    def _staircase(self, clauses: list[list[int]]):
-        result = []
-        map = {}
-        for i in range(1, len(clauses) - 1):
-            map[-clauses[i][i - 1]] = self.sat_model.get_new_var()
-            result.append([-clauses[i][i - 1], map[-clauses[i][i - 1]]])
-
-        for i in range(1, len(clauses) - 2):
-            result.append([-map[-clauses[i][i - 1]], map[-clauses[i + 1][i]]])
-
-    def encode_constraint_15(self):
+    def _encode_constraint_15(self):
         for t in range(self.makespan):
             for r in range(self.problem.nresources):
                 pb_constraint = PBConstr(self.sat_model, self.problem.capacities[r])
@@ -232,7 +212,7 @@ class Encoder:
                         pb_constraint.add_term(self.x[(i, t)], self.problem.requests[i][r])
                 pb_constraint.encode()
 
-    def encode_constraint_14(self) -> list[list[int]]:
+    def _encode_constraint_14(self) -> list[list[int]]:
         clauses = []
         for i in range(self.problem.njobs):
             for c in range(self.EC[i], self.LC[i]):
@@ -242,7 +222,7 @@ class Encoder:
 
         return clauses
 
-    def encode_constraint_13(self) -> list[list[int]]:
+    def _encode_constraint_13(self) -> list[list[int]]:
         clauses = []
         for i in range(self.problem.njobs):
             for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
@@ -252,7 +232,7 @@ class Encoder:
 
         return clauses
 
-    def encode_constraint_10(self) -> list[list[int]]:
+    def _encode_constraint_10(self) -> list[list[int]]:
         return [[self.y[(0, 0)]]]
 
     def get_result(self, model: list[int]) -> list[int]:

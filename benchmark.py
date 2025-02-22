@@ -124,4 +124,4 @@ def benchmark(name: str, encoder_type: EncoderType):
 if __name__ == '__main__':
     # multiprocessing.Process(target=benchmark, args=('j60.sm',)).start()
     # multiprocessing.Process(target=benchmark, args=('j90.sm',)).start()
-    benchmark('j30.sm', EncoderType.NEW_NO_OPT)
+    benchmark('j30.sm', EncoderType.NEW_OPT)

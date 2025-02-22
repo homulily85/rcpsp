@@ -88,19 +88,19 @@ class Encoder:
 
     def encode(self):
         # Job 0 starts at 0 (10)
-        self.sat_model.clauses.extend(self._encode_constraint_10())
+        self._encode_constraint_10()
 
         # Precedence clauses (11)
-        self.sat_model.clauses.extend(self._encode_constraint_11())
+        self._encode_constraint_11()
 
         # Start clauses (12)
-        self.sat_model.clauses.extend(self._encode_constraint_12())
+        self._encode_constraint_12()
 
         # Consistency clauses (13)
-        self.sat_model.clauses.extend(self._encode_constraint_13())
+        self._encode_constraint_13()
 
         # Add redundant clauses that should improve runtime (14)
-        self.sat_model.clauses.extend(self._encode_constraint_14())
+        self._encode_constraint_14()
 
         # Add resource constraints(15)
         self._encode_constraint_15()
@@ -114,38 +114,28 @@ class Encoder:
                         pb_constraint.add_term(self.x[(i, t)], self.problem.requests[i][r])
                 pb_constraint.encode()
 
-    def _encode_constraint_14(self) -> list[list[int]]:
-        clauses = []
+    def _encode_constraint_14(self):
         for i in range(self.problem.njobs):
             for c in range(self.EC[i], self.LC[i]):
-                clauses.append(
+                self.sat_model.clauses.append(
                     [-self.x[(i, c)], self.x[(i, c + 1)],
                      self.y[(i, c - self.problem.durations[i] + 1)]])
 
-        return clauses
-
-    def _encode_constraint_13(self) -> list[list[int]]:
-        clauses = []
+    def _encode_constraint_13(self):
         for i in range(self.problem.njobs):
             for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
                 for t in range(s, s + self.problem.durations[i]):
-                    clauses.append(
+                    self.sat_model.clauses.append(
                         [-self.y[(i, s)], self.x[(i, t)]])
 
-        return clauses
-
-    def _encode_constraint_12(self) -> list[list[int]]:
-        clauses = []
+    def _encode_constraint_12(self):
         for i in range(1, self.problem.njobs):
             clause = []
             for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
                 clause.append(self.y[(i, s)])
-            clauses.append(clause)
+            self.sat_model.clauses.append(clause)
 
-        return clauses
-
-    def _encode_constraint_11(self) -> list[list[int]]:
-        clauses = []
+    def _encode_constraint_11(self):
         for i in range(1, self.problem.njobs):
             for j in self.problem.predecessors[i]:
                 for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
@@ -156,11 +146,10 @@ class Encoder:
                         clause.append(self.y[(j, t)])
                         t += 1
 
-                    clauses.append(clause)
-        return clauses
+                    self.sat_model.clauses.append(clause)
 
-    def _encode_constraint_10(self) -> list[list[int]]:
-        return [[self.y[(0, 0)]]]
+    def _encode_constraint_10(self):
+        self.sat_model.clauses.append([self.y[(0, 0)]])
 
     def get_result(self, model: list[int]) -> list[int]:
         sol = []

@@ -16,27 +16,30 @@
 #         for t in range(i[0] + k, i[-1] + 1):
 #             print(f'6_{t}', end=' ')
 #         print()
+from pysat.solvers import Glucose3
 
-from encoder.new_encoder_no_optimize import Encoder
+from encoder.new_encoder_optimize import Encoder
 from encoder.problem import Problem
 
-p = Problem('data_set/j30.sm/j301_1.sm')
-# p =Problem('test_2022.sm')
+# p = Problem('data_set/j30.sm/j301_1.sm')
+p =Problem('data_set_test/test_2020.sm')
 
-e = Encoder(p, 125)
+e = Encoder(p, 8)
 for j in range(e.problem.njobs):
     print(
         f'Job {j}: ES{j} = {e.ES[j]}, LS{j} = {e.LS[j]}, EC{j} = {e.EC[j]}, LC{j} = {e.LC[j]},'
         f' length = {e.LS[j] - e.ES[j]}')
-# e.encode()
-# solver = Glucose3()
-# for c in e.sat_model.clauses:
-#     solver.add_clause(c)
-#
-# t = solver.solve()
-# print(t)
-# model = solver.get_model()
-# # print(e.get_result(model))
-# a  = e.get_result(model)
-# for i in range(len(a)):
-#     print(f'Job {i}: {a[i]}')
+e.encode()
+solver = Glucose3()
+for c in e.sat_model.clauses:
+    solver.add_clause(c)
+
+print(e.sat_model.number_of_variable)
+print(len(e.sat_model.clauses))
+
+t = solver.solve()
+print(t)
+model = solver.get_model()
+a  = e.get_result(model)
+for i in range(len(a)):
+    print(f'Job {i}: {a[i]}')

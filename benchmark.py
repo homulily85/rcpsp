@@ -2,12 +2,12 @@ import datetime
 import multiprocessing
 from enum import Enum
 
-from pysat.solvers import Glucose3
+from pysat.solvers import Glucose42
 import csv
 from encoder.problem import Problem
 import timeit
 
-TIME_LIMIT = 600
+TIME_LIMIT = 1200
 
 
 class EncoderType(Enum):
@@ -100,7 +100,7 @@ def benchmark(name: str, encoder_type: EncoderType):
                 q.put(result_info)
                 return
 
-            solver = Glucose3()
+            solver = Glucose42()
             for c in e.sat_model.clauses:
                 solver.add_clause(c)
 
@@ -199,7 +199,9 @@ def benchmark(name: str, encoder_type: EncoderType):
 
 
 if __name__ == '__main__':
-    # multiprocessing.Process(target=benchmark,args=('j60.sm',EncoderType.ORIGINAL)).start()
-    # multiprocessing.Process(target=benchmark,args=('j60.sm',EncoderType.NEW_OPT)).start()
-    benchmark('j60.sm', EncoderType.STAIRCASE_FIXED)
-    # benchmark('j60.sm', EncoderType.PAPER_2022)
+    for data_set in ['j30.sm','j60.sm','j90.sm','j120.sm']:
+        for type in [EncoderType.STAIRCASE_FIXED,EncoderType.PAPER_2022]:
+            print(f'Benchmark for {data_set} using {type.name} started at {datetime.datetime.now()}')
+            benchmark(data_set,type)
+            print(f'Benchmark for {data_set} using {type.name} finished at {datetime.datetime.now()}')
+

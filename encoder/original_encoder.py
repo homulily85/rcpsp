@@ -140,12 +140,14 @@ class Encoder:
             for j in self.problem.predecessors[i]:
                 for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
                     clause = [-self.y[(i, s)]]
+                    # print(f'y{i}{s}', end=' ')
 
                     t = self.ES[j]
                     while t <= s - self.problem.durations[j] and t <= self.LS[j]:
                         clause.append(self.y[(j, t)])
+                        # print(f'y{j}{t}', end=' ')
                         t += 1
-
+                    # print()
                     self.sat_model.clauses.append(clause)
 
     def _encode_constraint_10(self):

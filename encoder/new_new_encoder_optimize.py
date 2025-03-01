@@ -132,9 +132,16 @@ class Encoder:
             for i in self.problem.successors[j]:
                 m = max(self.ES[j] + self.problem.durations[j], self.ES[i])
 
-                self.sat_model.clauses.append(
-                    [self.y[i, t] for t in range(m, self.LS[i] + 1)]
-                )
+                # Old
+                # self.sat_model.clauses.append(
+                #     [self.y[i, t] for t in range(m, self.LS[i] + 1)]
+                # )
+
+                amz = [self.y[i, t] for t in
+                       range(self.ES[i], self.ES[j] + self.problem.durations[j])
+                       ]
+                if len(amz) > 0:
+                    self.sat_model.clauses.extend(Encoder._AMZ(amz))
 
                 temp: list[int] = []
 
@@ -147,8 +154,9 @@ class Encoder:
 
                         # print(f'{current}->{self.register[current]}')
                         # for x in range(m, k + 1):
-                            # print(f'y{i}{x}', end=' ')
+                        #     print(f'y{i}{x}', end=' ')
                         # print(f'-->{self.register[current]}')
+
                         # Constraint for staircase
                         self.sat_model.clauses.append([-self.y[i, k], self.register[current]])
                         # print(f'-y{i}{k} {self.register[current]}')
@@ -163,9 +171,25 @@ class Encoder:
                             self.sat_model.clauses.append([-self.y[i, k], -self.register[previous]])
                             # print(f'-y{i}{k} -{self.register[previous]}')
 
-                self.sat_model.clauses.append([
-                    self.y[j, t] for t in range(self.ES[j], self.LS[j] + 1)
-                ])
+                if len([self.y[i, t] for t in range(m, self.LS[i] + 1)]) == 1:
+                    self.sat_model.clauses.append(
+                        [self.y[i, t] for t in range(m, self.LS[i] + 1)]
+                    )
+                else:
+                    self.sat_model.clauses.append(
+                        [self.register[
+                             tuple([self.y[i, t] for t in range(m, self.LS[i] + 1)])
+                         ]]
+                    )
+
+                # print(self.register[
+                #           tuple([self.y[i, t] for t in range(m, self.LS[i] + 1)])
+                #       ])
+
+                # Old
+                # self.sat_model.clauses.append([
+                #     self.y[j, t] for t in range(self.ES[j], self.LS[j] + 1)
+                # ])
 
                 temp = []
                 for k in range(self.LS[j], self.ES[j] - 1, -1):
@@ -175,18 +199,35 @@ class Encoder:
                         self.register[current] = self.sat_model.get_new_var()
 
                         # for x in range(self.LS[j], k - 1, -1):
-                        #     print(f'y{j}{x}', end=' ')
+                            # print(f'y{j}{x}', end=' ')
                         # print(f'-->{self.register[current]}')
 
                         self.sat_model.clauses.append([-self.y[j, k], self.register[current]])
+                        # print(f'-y{j}{k} {self.register[current]}')
 
                         if k != self.LS[j]:
                             previous = tuple(temp[:len(temp) - 1])
                             self.sat_model.clauses.append(
                                 [-self.register[previous], self.register[current]])
+                            # print(f'-{self.register[previous]} {self.register[current]}')
                             self.sat_model.clauses.append(
                                 [self.register[previous], self.y[j, k], -self.register[current]])
+                            # print(f'{self.register[previous]} y{j}{k} -{self.register[current]}')
                             self.sat_model.clauses.append([-self.y[j, k], -self.register[previous]])
+                            # print(f'-y{j}{k} -{self.register[previous]}')
+
+                if len([tuple([self.y[j, t] for t in range(self.LS[j], self.ES[j] - 1, -1)])]) == 1:
+                    self.sat_model.clauses.append([
+                        self.y[j, t] for t in range(self.ES[j], self.LS[j] + 1)
+                    ])
+                else:
+                    self.sat_model.clauses.append(
+                        [self.register[
+                             tuple([self.y[j, t] for t in range(self.LS[j], self.ES[j] - 1, -1)])]]
+                    )
+
+                # print(self.register[
+                #           tuple([self.y[j, t] for t in range(self.LS[j], self.ES[j] - 1, -1)])])
 
                 for t in range(m, self.LS[i] + 1):
                     first_half_temp = list(self.y[j, k] for k in
@@ -243,3 +284,7 @@ class Encoder:
                     sol.append(s)
                     break
         return sol
+
+    @staticmethod
+    def _AMZ(amz):
+        return [[-i] for i in amz]

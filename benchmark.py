@@ -11,9 +11,13 @@ TIME_LIMIT = 600
 
 
 class EncoderType(Enum):
-    ORIGINAL = 1
-    NEW_NO_OPT = 2
-    NEW_OPT = 3
+    PAPER_2010 = 0
+    PAPER_2022 = 1
+    PSEUDO_STAIRCASE = 2
+    STAIRCASE = 3
+    STAIRCASE_FIXED = 4
+    PAPER_2022_EXACTLY_ONE = 5
+    PAPER_2010_EXACTLY_ONE = 6
 
 
 def benchmark(name: str, encoder_type: EncoderType):
@@ -24,14 +28,20 @@ def benchmark(name: str, encoder_type: EncoderType):
     log = f'log/{name}_{encoder_type.name}_{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.log'
 
     match encoder_type:
-        case EncoderType.ORIGINAL:
+        case EncoderType.PAPER_2010:
+            from encoder.original_original_encoder import Encoder, PreprocessingFailed
+        case EncoderType.PAPER_2022:
             from encoder.original_encoder import Encoder, PreprocessingFailed
-        case EncoderType.NEW_NO_OPT:
+        case EncoderType.PSEUDO_STAIRCASE:
             from encoder.new_encoder_no_optimize import Encoder, PreprocessingFailed
-        case EncoderType.NEW_OPT:
+        case EncoderType.STAIRCASE:
             from encoder.new_encoder_optimize import Encoder, PreprocessingFailed
-
-    # file_name, num_var, num_clause, feasible, make_span, total_encoding_time, total_solving_time, optimized
+        case EncoderType.STAIRCASE_FIXED:
+            from encoder.new_new_encoder_optimize import Encoder, PreprocessingFailed
+        case EncoderType.PAPER_2022_EXACTLY_ONE:
+            from encoder.original_encoder_added_EXO import Encoder, PreprocessingFailed
+        case EncoderType.PAPER_2010_EXACTLY_ONE:
+            from encoder.original_original_encoder_added_EXO import Encoder, PreprocessingFailed
 
     class InfoAttribute(Enum):
         NUM_VAR = 0
@@ -41,12 +51,19 @@ def benchmark(name: str, encoder_type: EncoderType):
         TOTAL_ENCODING_TIME = 4
         TOTAL_SOLVING_TIME = 5
         OPTIMIZED = 6
+        ZERO_LITS = 7
+        ONE_LITS = 8
+        TWO_LITS = 9
+        THREE_LITS = 10
+        FOUR_LITS = 11
+        MORE_THAN_FOUR_LITS = 12
+        MORE_THAN_TEN_LITS = 13
 
     queue = multiprocessing.Queue()
 
     def solver(file_name: str, lb: int, ub: int, q=queue):
         p = Problem(file_name)
-        result_info = [0, 0, False, 0, 0, 0, False]
+        result_info = [0, 0, False, 0, 0, 0, False, 0, 0, 0, 0, 0, 0, 0]
 
         q.put(result_info)
 
@@ -61,13 +78,26 @@ def benchmark(name: str, encoder_type: EncoderType):
                 e.encode()
                 stop_encoding_time = timeit.default_timer()
                 total_encoding_time += (stop_encoding_time - start_encoding_time)
+                result_info[InfoAttribute.TOTAL_ENCODING_TIME.value] = total_encoding_time * 1000
+                result_info[InfoAttribute.NUM_VAR.value] = e.sat_model.number_of_variable
+                result_info[InfoAttribute.NUM_CLAUSE.value] = len(e.sat_model.clauses)
+                lits = e.sat_model.number_of_literal()
+                result_info[InfoAttribute.ZERO_LITS.value] = lits[0]
+                result_info[InfoAttribute.ONE_LITS.value] = lits[1]
+                result_info[InfoAttribute.TWO_LITS.value] = lits[2]
+                result_info[InfoAttribute.THREE_LITS.value] = lits[3]
+                result_info[InfoAttribute.FOUR_LITS.value] = lits[4]
+                result_info[InfoAttribute.MORE_THAN_FOUR_LITS.value] = lits[5]
+                result_info[InfoAttribute.MORE_THAN_TEN_LITS.value] = lits[11]
                 q.get()
                 q.put(result_info)
             except PreprocessingFailed:
                 stop_encoding_time = timeit.default_timer()
                 total_encoding_time += (stop_encoding_time - start_encoding_time)
                 result_info[
-                    InfoAttribute.TOTAL_ENCODING_TIME.value] = total_encoding_time
+                    InfoAttribute.TOTAL_ENCODING_TIME.value] = total_encoding_time * 1000
+                q.get()
+                q.put(result_info)
                 return
 
             solver = Glucose3()
@@ -79,13 +109,10 @@ def benchmark(name: str, encoder_type: EncoderType):
             stop_solving_time = timeit.default_timer()
             total_solving_time += (stop_solving_time - start_solving_time)
 
-
-            result_info[InfoAttribute.TOTAL_ENCODING_TIME.value] = total_encoding_time
-            result_info[InfoAttribute.TOTAL_SOLVING_TIME.value] = total_solving_time
+            result_info[InfoAttribute.TOTAL_ENCODING_TIME.value] = total_encoding_time * 1000
+            result_info[InfoAttribute.TOTAL_SOLVING_TIME.value] = total_solving_time * 1000
 
             if sat:
-                result_info[InfoAttribute.NUM_VAR.value] = e.sat_model.number_of_variable
-                result_info[InfoAttribute.NUM_CLAUSE.value] = len(e.sat_model.clauses)
                 result_info[InfoAttribute.MAKE_SPAN.value] = i
                 result_info[InfoAttribute.FEASIBLE.value] = True
 
@@ -107,6 +134,13 @@ def benchmark(name: str, encoder_type: EncoderType):
             'file_name,'
             'num_var,'
             'num_clause,'
+            'zero_lits,'
+            'one_lits,'
+            'two_lits,'
+            'three_lits,'
+            'four_lits,'
+            'five_to_ten,'
+            'more_than_ten,'
             'feasible,'
             'make_span,'
             'total_encoding_time,'
@@ -132,6 +166,13 @@ def benchmark(name: str, encoder_type: EncoderType):
                 f.write(f'{file_name},'
                         f'{result_info[InfoAttribute.NUM_VAR.value]},'
                         f'{result_info[InfoAttribute.NUM_CLAUSE.value]},'
+                        f'{result_info[InfoAttribute.ZERO_LITS.value]},'
+                        f'{result_info[InfoAttribute.ONE_LITS.value]},'
+                        f'{result_info[InfoAttribute.TWO_LITS.value]},'
+                        f'{result_info[InfoAttribute.THREE_LITS.value]},'
+                        f'{result_info[InfoAttribute.FOUR_LITS.value]},'
+                        f'{result_info[InfoAttribute.MORE_THAN_FOUR_LITS.value]},'
+                        f'{result_info[InfoAttribute.MORE_THAN_TEN_LITS.value]},'
                         f'{result_info[InfoAttribute.FEASIBLE.value]},'
                         f'{result_info[InfoAttribute.MAKE_SPAN.value]},'
                         f'{round(result_info[InfoAttribute.TOTAL_ENCODING_TIME.value], 5)},'
@@ -158,7 +199,7 @@ def benchmark(name: str, encoder_type: EncoderType):
 
 
 if __name__ == '__main__':
-    # multiprocessing.Process(target=benchmark, args=('j60.sm',)).start()
-    # multiprocessing.Process(target=benchmark, args=('j90.sm',)).start()
-    benchmark('j60.sm', EncoderType.NEW_OPT)
-    # benchmark('j30.sm', EncoderType.ORIGINAL)
+    # multiprocessing.Process(target=benchmark,args=('j60.sm',EncoderType.ORIGINAL)).start()
+    # multiprocessing.Process(target=benchmark,args=('j60.sm',EncoderType.NEW_OPT)).start()
+    benchmark('j60.sm', EncoderType.STAIRCASE_FIXED)
+    # benchmark('j60.sm', EncoderType.PAPER_2022)

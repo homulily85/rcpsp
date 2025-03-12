@@ -1,30 +1,37 @@
+import timeit
+
 from pysat.solvers import Glucose42
 
-from encoder.original_encoder_added_EXO import Encoder
+from encoder.staircase import Encoder
 from encoder.problem import Problem
 
-p = Problem('data_set/j30.sm/j301_1.sm')
+p = Problem('data_set/j90.sm/j905_6.sm')
 # p = Problem('data_set_test/test_2022.sm')
 
-e = Encoder(p, 47)
+e = Encoder(p, 86)
 for j in range(e.problem.njobs):
     print(
         f'Job {j}: ES{j} = {e.ES[j]}, LS{j} = {e.LS[j]}, EC{j} = {e.EC[j]}, LC{j} = {e.LC[j]},'
         f' length = {e.LS[j] - e.ES[j]}')
+
 e.encode()
 solver = Glucose42()
 for c in e.sat_model.clauses:
     solver.add_clause(c)
 
-print('Number of vars: ', e.sat_model.number_of_variable)
-print('Number of clauses: ',len(e.sat_model.clauses))
+# print('Number of vars: ', e.sat_model.number_of_variable)
+# print('Number of clauses: ', len(e.sat_model.clauses))
 
+start_time = timeit.default_timer()
 t = solver.solve()
-print(t)
+solve_time = timeit.default_timer() - start_time
+print(solve_time)
+
 model = solver.get_model()
-a = e.get_result(model)
-for i in range(len(a)):
-    print(f'Job {i}: {a[i]}')
+
+# a = e.get_result(model)
+# for i in range(len(a)):
+#     print(f'Job {i}: {a[i]}')
 
 
 def verify(encoder: Encoder, model: list[int]):

@@ -2,6 +2,8 @@ class SATModel:
     def __init__(self):
         self.number_of_variable = 0
         self.clauses: list[list[int]] = []
+        self.number_of_PB_clause = 0
+        self.number_of_consistency_clause = 0
 
     def get_new_var(self) -> int:
         self.number_of_variable += 1

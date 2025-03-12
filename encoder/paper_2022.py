@@ -87,6 +87,7 @@ class Encoder:
                     queue.put(predecessor)
 
     def encode(self):
+
         # Job 0 starts at 0 (10)
         self._encode_constraint_10()
 
@@ -127,27 +128,29 @@ class Encoder:
                 for t in range(s, s + self.problem.durations[i]):
                     self.sat_model.clauses.append(
                         [-self.y[(i, s)], self.x[(i, t)]])
+                    self.sat_model.number_of_consistency_clause += 1
 
     def _encode_constraint_12(self):
         for i in range(1, self.problem.njobs):
             clause = []
             for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
                 clause.append(self.y[(i, s)])
-
-                for a in range(s + 1, self.LS[i] + 1):
-                    self.sat_model.clauses.append([-self.y[i, a], -self.y[i, s]])
-
             self.sat_model.clauses.append(clause)
 
     def _encode_constraint_11(self):
         for i in range(1, self.problem.njobs):
             for j in self.problem.predecessors[i]:
                 for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
-                    t = self.LS[j]
-                    while s - self.problem.durations[j] < t <= self.LS[j] and t >= self.ES[j]:
-                        self.sat_model.clauses.append([-self.y[(i, s)], -self.y[j, t]])
-                        # print(f'-y{i, s},-y{j, t}')
-                        t -= 1
+                    clause = [-self.y[(i, s)]]
+                    # print(f'y{i}{s}', end=' ')
+
+                    t = self.ES[j]
+                    while t <= s - self.problem.durations[j] and t <= self.LS[j]:
+                        clause.append(self.y[(j, t)])
+                        # print(f'y{j}{t}', end=' ')
+                        t += 1
+                    # print()
+                    self.sat_model.clauses.append(clause)
 
     def _encode_constraint_10(self):
         self.sat_model.clauses.append([self.y[(0, 0)]])

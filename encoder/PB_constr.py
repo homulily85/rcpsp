@@ -16,7 +16,7 @@ class PBConstr:
 
     def encode(self):
         cnf = PBEnc.leq(lits=self._literals, weights=self._weights, bound=self._bound,
-                        top_id=self._model.number_of_variable).clauses
+                        top_id=self._model.number_of_variable,encoding=EncType.bdd).clauses
 
         # cnf can be empty
         if not cnf:
@@ -33,6 +33,7 @@ class PBConstr:
 
         self._model.number_of_variable = max(M, self._model.number_of_variable)
         self._model.clauses.extend(cnf)
+        self._model.number_of_PB_clause += len(cnf)
 
     # def number_of_term(self) -> int:
     #     return len(self._literals)

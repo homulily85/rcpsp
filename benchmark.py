@@ -7,7 +7,7 @@ import csv
 from encoder.problem import Problem
 import timeit
 
-TIME_LIMIT = 1200
+TIME_LIMIT = 300  # seconds
 
 
 class EncoderType(Enum):
@@ -32,28 +32,30 @@ def benchmark(name: str, encoder_type: EncoderType):
             from encoder.staircase import Encoder, PreprocessingFailed
 
     class InfoAttribute(Enum):
-        NUM_VAR = 0
-        NUM_CLAUSE = 1
-        NUM_CONSISTENCY_ClAUSE = 2
-        NUM_PB_CLAUSE = 3
-        FEASIBLE = 4
-        MAKE_SPAN = 5
-        TOTAL_ENCODING_TIME = 6
-        TOTAL_SOLVING_TIME = 7
-        OPTIMIZED = 8
-        ZERO_LITS = 9
-        ONE_LITS = 10
-        TWO_LITS = 11
-        THREE_LITS = 12
-        FOUR_LITS = 13
-        MORE_THAN_FOUR_LITS = 14
-        MORE_THAN_TEN_LITS = 15
+        LB = 0
+        UB = 1
+        NUM_VAR = 2
+        NUM_CLAUSE = 3
+        NUM_CONSISTENCY_ClAUSE = 4
+        NUM_PB_CLAUSE = 5
+        FEASIBLE = 6
+        MAKE_SPAN = 7
+        TOTAL_ENCODING_TIME = 8
+        TOTAL_SOLVING_TIME = 9
+        OPTIMIZED = 10
+        ZERO_LITS = 11
+        ONE_LITS = 12
+        TWO_LITS = 13
+        THREE_LITS = 14
+        FOUR_LITS = 15
+        MORE_THAN_FOUR_LITS = 16
+        MORE_THAN_TEN_LITS = 17
 
     queue = multiprocessing.Queue()
 
     def solver(file_name: str, lb: int, ub: int, q=queue):
         p = Problem(file_name)
-        result_info = [0, 0, 0, 0, False, 0, 0, 0, False, 0, 0, 0, 0, 0, 0, 0]
+        result_info = [0, 0, 0, 0, 0, 0, False, 0, 0, 0, False, 0, 0, 0, 0, 0, 0, 0]
 
         q.put(result_info)
 
@@ -82,6 +84,8 @@ def benchmark(name: str, encoder_type: EncoderType):
                 result_info[InfoAttribute.NUM_PB_CLAUSE.value] = e.sat_model.number_of_PB_clause
                 result_info[
                     InfoAttribute.NUM_CONSISTENCY_ClAUSE.value] = e.sat_model.number_of_consistency_clause
+                result_info[InfoAttribute.LB.value] = lb
+                result_info[InfoAttribute.UB.value] = ub
                 q.get()
                 q.put(result_info)
             except PreprocessingFailed:
@@ -125,6 +129,8 @@ def benchmark(name: str, encoder_type: EncoderType):
     with open(output_name, "a+") as f:
         f.write(
             'file_name,'
+            'lb,'
+            'ub,'
             'num_var,'
             'num_clause,'
             'num_consistency_clause,'
@@ -161,6 +167,8 @@ def benchmark(name: str, encoder_type: EncoderType):
 
             with open(output_name, "a+") as f:
                 f.write(f'{file_name},'
+                        f'{result_info[InfoAttribute.LB.value]},'
+                        f'{result_info[InfoAttribute.UB.value]},'
                         f'{result_info[InfoAttribute.NUM_VAR.value]},'
                         f'{result_info[InfoAttribute.NUM_CLAUSE.value]},'
                         f'{result_info[InfoAttribute.NUM_CONSISTENCY_ClAUSE.value]},'
@@ -199,7 +207,7 @@ def benchmark(name: str, encoder_type: EncoderType):
 
 
 if __name__ == '__main__':
-    for data_set in ['j30.sm']:
+    for data_set in ['j60.sm']:
         for type in [EncoderType.STAIRCASE]:
             print(
                 f'Benchmark for {data_set} using {type.name} started at {datetime.datetime.now()}')

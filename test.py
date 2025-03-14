@@ -5,10 +5,10 @@ from pysat.solvers import Glucose42
 from encoder.staircase import Encoder
 from encoder.problem import Problem
 
-p = Problem('data_set/j90.sm/j905_6.sm')
+p = Problem('data_set/j30.sm/j305_6.sm')
 # p = Problem('data_set_test/test_2022.sm')
 
-e = Encoder(p, 86)
+e = Encoder(p, 64)
 for j in range(e.problem.njobs):
     print(
         f'Job {j}: ES{j} = {e.ES[j]}, LS{j} = {e.LS[j]}, EC{j} = {e.EC[j]}, LC{j} = {e.LC[j]},'

@@ -4,6 +4,8 @@ from psplib import parse
 class Problem:
     def __init__(self, input_file: str):
         instance = parse(input_file, instance_format="psplib")
+        # Problem name
+        self.name = input_file
         # Number of activities (including dummy start and end activities)
         self.njobs = instance.num_activities
         # Number of renewable resources

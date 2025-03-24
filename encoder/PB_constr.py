@@ -8,7 +8,6 @@ class PBConstr:
         self._weights = []
         self._bound = bound
         self._model = model
-        self._var_index = {}
 
     def add_term(self, lit: int, weights: int):
         self._literals.append(lit)
@@ -16,7 +15,7 @@ class PBConstr:
 
     def encode(self):
         cnf = PBEnc.leq(lits=self._literals, weights=self._weights, bound=self._bound,
-                        top_id=self._model.number_of_variable,encoding=EncType.bdd).clauses
+                        top_id=self._model.number_of_variable, encoding=EncType.bdd).clauses
 
         # cnf can be empty
         if not cnf:
@@ -32,8 +31,7 @@ class PBConstr:
             return
 
         self._model.number_of_variable = max(M, self._model.number_of_variable)
-        self._model.clauses.extend(cnf)
-        self._model.number_of_PB_clause += len(cnf)
+        for clause in cnf:
+            self._model.add_clause(clause)
 
-    # def number_of_term(self) -> int:
-    #     return len(self._literals)
+        self._model.number_of_PB_clause += len(cnf)

@@ -1,3 +1,4 @@
+from copy import deepcopy
 from queue import Queue
 from threading import Timer
 
@@ -32,6 +33,7 @@ class Encoder:
         self._preprocessing()
 
         self.time_used = 0
+        self.solution = None
 
     def _preprocessing(self):
         self._calc_time_windows()
@@ -130,13 +132,20 @@ class Encoder:
         """This method is used to decrease the makespan of the problem.
         It should be called after encode() and solve() methods.
         After calling this method, you will need to call solve() method to solve problem with new makespan."""
-        self.makespan -= 1
         for consistency_variable in self.x.keys():
             if self.makespan in consistency_variable:
                 self.assumptions.add(-self.x[consistency_variable])
+        for start_variable in self.y.keys():
+            if start_variable[1] >= self.makespan:
+                self.assumptions.add(-self.y[start_variable])
+        self.makespan -= 1
+        self.solution = None
 
     def get_result(self) -> list[int]:
         """Get the result of the problem where the result is a list of start times for each activity."""
+        if self.solution is not None:
+            return self.solution
+
         if self.sat_model.solver.get_model() is None:
             raise Exception(
                 f"This problem is unsatisfiable with the current makespan {self.makespan}")
@@ -151,28 +160,25 @@ class Encoder:
     def verify(self):
         """Verify the solution of the problem."""
         # Get start time
-        start_time = self.get_result()
+        solution = self.get_result()
 
         # Check precedence constraint
-        for activity in range(self.problem.njobs):
-            for successor in self.problem.successors[activity]:
-                if start_time[successor] < start_time[activity] + self.problem.durations[
-                    activity]:
+        for job in range(self.problem.njobs):
+            for predecessor in self.problem.predecessors[job]:
+                if solution[job] < solution[predecessor] + self.problem.durations[predecessor]:
                     print(
-                        f"Failed when checking precedence constraint for {activity} -> {successor}"
+                        f"Failed when checking precedence constraint for {predecessor} -> {job}"
                         f" while checking {self.problem.name}")
                     exit(-1)
-        # Checking resource constraint
-        for t in range(start_time[-1] + 1):
-            total_request = [0 for _ in range(self.problem.nresources)]
-            for activity in range(self.problem.njobs):
-                if start_time[activity] <= t <= start_time[activity] + self.problem.durations[
-                    activity] - 1:
-                    for r in range(self.problem.njobs):
-                        total_request += self.problem.requests[r]
 
+        # Checking resource constraint
+        for t in range(solution[-1] + 1):
             for r in range(self.problem.nresources):
-                if total_request[r] > self.problem.capacities[r]:
+                total_consume = 0
+                for j in range(self.problem.njobs):
+                    if solution[j] <= t <= solution[j] + self.problem.durations[j] - 1:
+                        total_consume += self.problem.requests[j][r]
+                if total_consume > self.problem.capacities[r]:
                     print(f"Failed when check resource constraint for resource {r} at t = {t}"
                           f" while checking {self.problem.name}")
                     exit(-1)

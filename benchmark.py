@@ -202,7 +202,7 @@ def benchmark(data_set_name: str, encoder_type: EncoderType):
 
 
 if __name__ == '__main__':
-    for data_set in ['j30.sm']:
+    for data_set in ['pack']:
         for type in [EncoderType.STAIRCASE]:
             print(
                 f'Benchmark for {data_set} using {type.name} started at {datetime.datetime.now()}')

@@ -84,7 +84,7 @@ class StaircaseEncoder(Encoder):
                             self.sat_model.add_clause([-self.y[j, k], -self.register[previous]])
                             # print(f'-y{j}{k} -{self.register[previous]}')
 
-                if len(tuple([self.y[j, t] for t in range(self.LS[j], self.ES[j] - 1, -1)])) == 1:
+                if len([tuple([self.y[j, t] for t in range(self.LS[j], self.ES[j] - 1, -1)])]) == 1:
                     self.sat_model.add_clause([
                         self.y[j, t] for t in range(self.ES[j], self.LS[j] + 1)
                     ])

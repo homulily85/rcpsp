@@ -14,6 +14,7 @@ class EncoderType(Enum):
     THESIS_2022 = 1
     STAIRCASE = 2
 
+
 class InfoAttribute(Enum):
     LB = 0
     UB = 1
@@ -227,7 +228,6 @@ def main():
     benchmark(args.dataset_name, encoder_type, timeout, args.verify)
     print(
         f'Benchmark for {args.dataset_name} using {encoder_type.name} finished at {datetime.datetime.now()}')
-
 
 
 if __name__ == '__main__':

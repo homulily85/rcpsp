@@ -13,6 +13,7 @@ class PreprocessingFailed(Exception):
 class Encoder:
     def __init__(self, problem: Problem, makespan: int, timeout: int = None,
                  enable_verify: bool = False):
+        """Initialize the encoder with the problem, makespan, timeout, and verification flag."""
         self.time_out = timeout
         self.enable_verify = enable_verify
         self.sat_model = SATModel()
@@ -118,7 +119,7 @@ class Encoder:
             def interrupt(s):
                 s.interrupt()
 
-            timer = Timer(self.time_out, interrupt, [self.sat_model.solver])
+            timer = Timer(self.time_out - self.time_used, interrupt, [self.sat_model.solver])
             timer.start()
 
         try:

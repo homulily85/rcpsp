@@ -8,109 +8,131 @@ class StaircaseEncoder(Encoder):
         self._start_time_for_job_0()
         self._precedence_constraint()
         self._consistency_constraint()
-        # Add redundant clauses that should improve runtime
         self._redundant_constraint()
 
     def _precedence_constraint(self):
-        for j in range(1, self.problem.njobs):
-            for i in self.problem.successors[j]:
-                m = max(self.ES[j] + self.problem.durations[j], self.ES[i])
+        for predecessor in range(1, self.problem.njobs):
+            for successor in self.problem.successors[predecessor]:
+                # Successor can only start at one time
+                self.sat_model.add_clause(
+                    [self._get_forward_staircase_register(successor, self.ES[successor],
+                                                          self.LS[successor] + 1)])
+                # print([self._get_forward_staircase_register(successor,
+                #                                             self.ES[successor],
+                #                                             self.LS[successor] + 1)])
 
-                temp: list[int] = []
+                # Predecessor can only start at one time
+                self.sat_model.add_clause(
+                    [self._get_backward_staircase_register(predecessor, self.ES[predecessor],
+                                                           self.LS[predecessor] + 1)])
+                # print([self._get_backward_staircase_register(predecessor,
+                #                                              self.ES[predecessor],
+                #                                              self.LS[predecessor] + 1)])
 
-                for k in range(m, self.LS[i] + 1):
-                    # Linking subset to auxiliary variable
-                    temp.append(self.y[i, k])
-                    current = tuple(temp)
-                    if current not in self.register:
-                        self.register[current] = self.sat_model.get_new_var()
-
-                        # print(f'{current}->{self.register[current]}')
-                        # for x in range(m, k + 1):
-                        #     print(f'y{i}{x}', end=' ')
-                        # print(f'-->{self.register[current]}')
-
-                        # Constraint for staircase
-                        self.sat_model.add_clause([-self.y[i, k], self.register[current]])
-                        # print(f'-y{i}{k} {self.register[current]}')
-                        if k != m:
-                            previous = tuple(temp[:len(temp) - 1])
-                            self.sat_model.add_clause(
-                                [-self.register[previous], self.register[current]])
-                            # print(f'-{self.register[previous]} {self.register[current]}')
-                            self.sat_model.add_clause(
-                                [self.register[previous], self.y[i, k], -self.register[current]])
-                            # print(f'{self.register[previous]} y{i}{k} -{self.register[current]}')
-                            self.sat_model.add_clause([-self.y[i, k], -self.register[previous]])
-                            # print(f'-y{i}{k} -{self.register[previous]}')
-
-                if len([self.y[i, t] for t in range(m, self.LS[i] + 1)]) == 1:
-                    self.sat_model.add_clause(
-                        [self.y[i, t] for t in range(m, self.LS[i] + 1)]
-                    )
-                else:
-                    self.sat_model.add_clause(
-                        [self.register[
-                             tuple([self.y[i, t] for t in range(m, self.LS[i] + 1)])
-                         ]]
-                    )
-
-                # print(self.register[
-                #           tuple([self.y[i, t] for t in range(m, self.LS[i] + 1)])
-                #       ])
-
-                temp = []
-                for k in range(self.LS[j], self.ES[j] - 1, -1):
-                    temp.append(self.y[j, k])
-                    current = tuple(temp)
-                    if current not in self.register:
-                        self.register[current] = self.sat_model.get_new_var()
-
-                        # for x in range(self.LS[j], k - 1, -1):
-                        # print(f'y{j}{x}', end=' ')
-                        # print(f'-->{self.register[current]}')
-
-                        self.sat_model.add_clause([-self.y[j, k], self.register[current]])
-                        # print(f'-y{j}{k} {self.register[current]}')
-
-                        if k != self.LS[j]:
-                            previous = tuple(temp[:len(temp) - 1])
-                            self.sat_model.add_clause(
-                                [-self.register[previous], self.register[current]])
-                            # print(f'-{self.register[previous]} {self.register[current]}')
-                            self.sat_model.add_clause(
-                                [self.register[previous], self.y[j, k], -self.register[current]])
-                            # print(f'{self.register[previous]} y{j}{k} -{self.register[current]}')
-                            self.sat_model.add_clause([-self.y[j, k], -self.register[previous]])
-                            # print(f'-y{j}{k} -{self.register[previous]}')
-
-                if len([tuple([self.y[j, t] for t in range(self.LS[j], self.ES[j] - 1, -1)])]) == 1:
-                    self.sat_model.add_clause([
-                        self.y[j, t] for t in range(self.ES[j], self.LS[j] + 1)
-                    ])
-                else:
-                    self.sat_model.add_clause(
-                        [self.register[
-                             tuple([self.y[j, t] for t in range(self.LS[j], self.ES[j] - 1, -1)])]]
-                    )
-
-                # print(self.register[
-                #           tuple([self.y[j, t] for t in range(self.LS[j], self.ES[j] - 1, -1)])])
-
-                for t in range(m, self.LS[i] + 1):
-                    first_half_temp = list(self.y[j, k] for k in
-                                           range(t - self.problem.durations[j] + 1, self.LS[j] + 1))
-
-                    if len(first_half_temp) == 0:
+                # Precedence constraint
+                for k in range(self.ES[successor], self.LS[successor] + 1):
+                    first_half = self._get_forward_staircase_register(successor,
+                                                                      self.ES[successor],
+                                                                      k + 1)
+                    second_half = self._get_backward_staircase_register(predecessor,
+                                                                        k - self.problem.durations[
+                                                                            predecessor] + 1,
+                                                                        self.LS[predecessor] + 1)
+                    if first_half is None or second_half is None:
                         continue
 
-                    first_half_temp.reverse()
-                    first_half = tuple(first_half_temp)
+                    self.sat_model.add_clause([-first_half, -second_half])
+                    # print([-first_half, -second_half])
 
-                    second_half = tuple(self.y[i, k] for k in range(m, t + 1))
+    def _get_forward_staircase_register(self, job: int, start: int, end: int) -> int | None:
+        """Get forward staircase register for a job for a range of time [start, end)"""
+        # Check if current job with provided start and end time is already in the register
+        if start >= end:
+            return None
+        temp = tuple(self.y[(job, s)] for s in range(start, end))
+        if temp in self.register:
+            return self.register[temp]
 
+        # Store the start time of the job
+        accumulative = []
+        for s in range(start, end):
+            accumulative.append(self.y[(job, s)])
+            current_tuple = tuple(accumulative)
+            # If the current tuple is not in the register, create a new variable
+            if current_tuple not in self.register:
+                # Create a new variable for the current tuple
+                self.register[current_tuple] = self.sat_model.get_new_var()
+                # print(f'{current_tuple} - > {self.register[current_tuple]}')
+
+                # Create constraint for staircase
+
+                # If current tuple is true then the register associated with it must be true
+                self.sat_model.add_clause(
+                    [-self.y[(job, s)], self.register[current_tuple]])
+
+                if s == start:
                     self.sat_model.add_clause(
-                        [-self.register[first_half], -self.register[second_half]])
+                        [self.y[(job, s)], -self.register[current_tuple]])
+                else:
+                    # Get the previous tuple
+                    previous_tuple = tuple(accumulative[:-1])
+                    # If previous tuple is true then the current register must be true
+                    self.sat_model.add_clause(
+                        [-self.register[previous_tuple], self.register[current_tuple]])
+
+                    # Both previous tuple and current variable is false then current tuple must be false
+                    self.sat_model.add_clause(
+                        [self.register[previous_tuple], self.y[job, s],
+                         -self.register[current_tuple]])
+
+                    # Previous tuple and current variable must not be true at the same time
+                    self.sat_model.add_clause(
+                        [-self.register[previous_tuple], -self.y[(job, s)]])
+
+        return self.register[temp]
+
+    def _get_backward_staircase_register(self, job: int, start: int, end: int) -> int | None:
+        """Get backward staircase register for a job for a range of time [start, end)"""
+        # Check if current job with provided start and end time is already in the register
+        if start >= end:
+            return None
+        temp = tuple(self.y[(job, s)] for s in range(end - 1, start - 1, -1))
+        if temp in self.register:
+            return self.register[temp]
+
+        accumulative = []
+        for s in range(end - 1, start - 1, -1):
+            accumulative.append(self.y[(job, s)])
+            current_tuple = tuple(accumulative)
+            # If the current tuple is not in the register, create a new variable
+            if current_tuple not in self.register:
+                # Create a new variable for the current tuple
+                self.register[current_tuple] = self.sat_model.get_new_var()
+                # print(f'{current_tuple} - > {self.register[current_tuple]}')
+
+                # Create constraint for staircase
+
+                # If current tuple is true then the register associated with it must be true
+                self.sat_model.add_clause(
+                    [-self.y[(job, s)], self.register[current_tuple]])
+
+                if s != end - 1:
+                    # Get the previous tuple
+                    previous_tuple = tuple(accumulative[:-1])
+                    # If previous tuple is true then the current register must be true
+                    self.sat_model.add_clause(
+                        [-self.register[previous_tuple], self.register[current_tuple]])
+
+                    # Both previous tuple and current variable is false then current tuple must be false
+                    self.sat_model.add_clause(
+                        [self.register[previous_tuple], self.y[job, s],
+                         -self.register[current_tuple]])
+
+                    # Previous tuple and current variable must not be true at the same time
+                    self.sat_model.add_clause(
+                        [-self.register[previous_tuple], -self.y[(job, s)]])
+
+        return self.register[temp]
 
     def _resource_constraint(self):
         for t in range(self.makespan):

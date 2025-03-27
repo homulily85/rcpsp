@@ -1,17 +1,18 @@
+import argparse
 import csv
-import timeit
 import datetime
-from enum import Enum, auto
+import timeit
+from enum import Enum
+
 from encoder.SAT_model import NUMBER_OF_LITERAL
 from encoder.problem import Problem
 
-TIME_LIMIT = 1  # seconds
+TIME_LIMIT = 1200  # seconds
 
 
 class EncoderType(Enum):
-    THESIS_2022 = auto()
-    STAIRCASE = auto()
-
+    THESIS_2022 = 1
+    STAIRCASE = 2
 
 class InfoAttribute(Enum):
     LB = 0
@@ -33,12 +34,14 @@ class InfoAttribute(Enum):
     MORE_THAN_TEN_LITS = 16
 
 
-def benchmark(data_set_name: str, encoder_type: EncoderType):
+def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verify: bool):
     """
     Run the benchmark for the given dataset and encoder type.
     Args:
         data_set_name (str): The name of the dataset to benchmark.
         encoder_type (EncoderType): The type of encoder to use.
+        timeout: (int) Timeout for solving (0 for no timeout).
+        verify: (bool) Verify the result after solving.
     """
     start = timeit.default_timer()
 
@@ -87,9 +90,9 @@ def benchmark(data_set_name: str, encoder_type: EncoderType):
             p = Problem(file_name)
             encoder = None
             if encoder_type == EncoderType.STAIRCASE:
-                encoder = StaircaseEncoder(p, ub)
+                encoder = StaircaseEncoder(p, ub, timeout, verify)
             elif encoder_type == EncoderType.THESIS_2022:
-                encoder = Thesis2022Encoder(p, ub)
+                encoder = Thesis2022Encoder(p, ub, timeout, verify)
 
             encoder.encode()
 
@@ -201,11 +204,31 @@ def benchmark(data_set_name: str, encoder_type: EncoderType):
                 f'finished with total running time {round(timeit.default_timer() - start, 5)}\n')
 
 
+def main():
+    parser = argparse.ArgumentParser(description='Benchmarking script for SAT encoders.')
+    parser.add_argument('dataset_name', type=str, help='The name of the dataset to benchmark.')
+    parser.add_argument('encoder_type', type=int, choices=[1, 2],
+                        help='The type of encoder to use: 1 for THESIS_2022, 2 for STAIRCASE.')
+    parser.add_argument('timeout', type=int, help='Timeout for solving (0 for no timeout).')
+    parser.add_argument('--verify', action='store_true', help='Verify the result after solving.')
+
+    args = parser.parse_args()
+
+    encoder_type_map = {
+        1: EncoderType.THESIS_2022,
+        2: EncoderType.STAIRCASE,
+    }
+
+    encoder_type = encoder_type_map[args.encoder_type]
+    timeout = None if args.timeout == 0 else args.timeout
+
+    print(
+        f'Benchmark for {args.dataset_name} using {encoder_type.name} started at {datetime.datetime.now()}')
+    benchmark(args.dataset_name, encoder_type, timeout, args.verify)
+    print(
+        f'Benchmark for {args.dataset_name} using {encoder_type.name} finished at {datetime.datetime.now()}')
+
+
+
 if __name__ == '__main__':
-    for data_set in ['pack']:
-        for type in [EncoderType.STAIRCASE]:
-            print(
-                f'Benchmark for {data_set} using {type.name} started at {datetime.datetime.now()}')
-            benchmark(data_set, type)
-            print(
-                f'Benchmark for {data_set} using {type.name} finished at {datetime.datetime.now()}')
+    main()

@@ -1,4 +1,3 @@
-from copy import deepcopy
 from queue import Queue
 from threading import Timer
 
@@ -12,7 +11,10 @@ class PreprocessingFailed(Exception):
 
 
 class Encoder:
-    def __init__(self, problem: Problem, makespan: int):
+    def __init__(self, problem: Problem, makespan: int, timeout: int = None,
+                 enable_verify: bool = False):
+        self.time_out = timeout
+        self.enable_verify = enable_verify
         self.sat_model = SATModel()
         self.problem = problem
         self.makespan = makespan
@@ -104,7 +106,7 @@ class Encoder:
         """Encode the problem into SAT clauses."""
         raise NotImplementedError()
 
-    def solve(self, timeout=None):
+    def solve(self):
         """Solve the problem with the current makespan.
         This method should be called after encode() method."""
         assumptions = list(self.assumptions)
@@ -112,11 +114,11 @@ class Encoder:
         self.sat_model.solver.clear_interrupt()
         timer = None  # Initialize timer
 
-        if timeout is not None:
+        if self.time_out is not None:
             def interrupt(s):
                 s.interrupt()
 
-            timer = Timer(timeout, interrupt, [self.sat_model.solver])
+            timer = Timer(self.time_out, interrupt, [self.sat_model.solver])
             timer.start()
 
         try:
@@ -159,6 +161,8 @@ class Encoder:
 
     def verify(self):
         """Verify the solution of the problem."""
+        if not self.enable_verify:
+            return
         # Get start time
         solution = self.get_result()
 

@@ -10,7 +10,8 @@ class Problem:
         self.data_set_name = path_parts[-2] if len(path_parts) >= 2 else ""
 
         problem_data = self.psplib_parse() if self.data_set_name in ['j30.sm', 'j60.sm', 'j90.sm',
-                                                                     'j120.sm'] else self.pack_parse()
+                                                                     'j120.sm',
+                                                                     'data_set_test'] else self.pack_parse()
 
         # Set class attributes from parsed data
         self.njobs = problem_data["njobs"]
@@ -87,7 +88,8 @@ class Problem:
             num_successors = line_parts[1 + nresources]
 
             # Successors - convert from 1-based to 0-based indexing
-            successors[job_idx] = [succ - 1 for succ in line_parts[2 + nresources:2 + nresources + num_successors]]
+            successors[job_idx] = [succ - 1 for succ in
+                                   line_parts[2 + nresources:2 + nresources + num_successors]]
 
         # Generate predecessors
         for i in range(njobs):
@@ -103,4 +105,3 @@ class Problem:
             "requests": requests,
             "capacities": capacities
         }
-

@@ -12,7 +12,7 @@ class PreprocessingFailed(Exception):
 
 class Encoder:
     def __init__(self, problem: Problem, makespan: int, timeout: int = None,
-                 enable_verify: bool = False):
+                 enable_verify: bool = False) -> None:
         """Initialize the encoder with the problem, makespan, timeout, and verification flag."""
         self.time_out = timeout
         self.enable_verify = enable_verify

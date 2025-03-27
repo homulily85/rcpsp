@@ -7,8 +7,6 @@ from enum import Enum
 from encoder.SAT_model import NUMBER_OF_LITERAL
 from encoder.problem import Problem
 
-TIME_LIMIT = 1200  # seconds
-
 
 class EncoderType(Enum):
     THESIS_2022 = 1
@@ -121,7 +119,7 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
                 'timeout': False
             }
 
-            sat = encoder.solve(timeout=TIME_LIMIT)
+            sat = encoder.solve()
 
             if sat is None:
                 result_info['timeout'] = True
@@ -143,7 +141,7 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
 
                 while sat and encoder.makespan > lb:
                     encoder.decrease_makespan()
-                    sat = encoder.solve(timeout=TIME_LIMIT - encoder.time_used)
+                    sat = encoder.solve()
 
                     if sat is None:
                         result_info['timeout'] = True
@@ -208,16 +206,16 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
 def main():
     parser = argparse.ArgumentParser(description='Benchmarking script for SAT encoders.')
     parser.add_argument('dataset_name', type=str, help='The name of the dataset to benchmark.')
-    parser.add_argument('encoder_type', type=int, choices=[1, 2],
-                        help='The type of encoder to use: 1 for THESIS_2022, 2 for STAIRCASE.')
+    parser.add_argument('encoder_type', type=str, choices=['thesis', 'staircase'],
+                        help='The type of encoder to use: thesis for THESIS_2022, staircase for STAIRCASE.')
     parser.add_argument('timeout', type=int, help='Timeout for solving (0 for no timeout).')
     parser.add_argument('--verify', action='store_true', help='Verify the result after solving.')
 
     args = parser.parse_args()
 
     encoder_type_map = {
-        1: EncoderType.THESIS_2022,
-        2: EncoderType.STAIRCASE,
+        'thesis': EncoderType.THESIS_2022,
+        'staircase': EncoderType.STAIRCASE,
     }
 
     encoder_type = encoder_type_map[args.encoder_type]

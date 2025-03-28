@@ -116,7 +116,11 @@ class StaircaseEncoder(Encoder):
                 self.sat_model.add_clause(
                     [-self.y[(job, s)], self.register[current_tuple]])
 
-                if s != end - 1:
+                if s == end - 1:
+                    self.sat_model.add_clause(
+                        [self.y[(job, s)], -self.register[current_tuple]])
+
+                else:
                     # Get the previous tuple
                     previous_tuple = tuple(accumulative[:-1])
                     # If previous tuple is true then the current register must be true

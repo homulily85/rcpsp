@@ -1,10 +1,10 @@
 from encoder.problem import Problem
-from encoder.staircase import StaircaseEncoder
+from encoder.staircase import StaircaseSATEncoder
 
 p = Problem('data_set/j30.sm/j301_2.sm')
 # p = Problem('data_set/data_set_test/test_2020.sm')
 # p = Problem('data_set/data_set_test/test_2022.sm')
-e = StaircaseEncoder(p, 47)
+e = StaircaseSATEncoder(p, 47)
 e.encode()
 sat = e.solve()
 while sat:

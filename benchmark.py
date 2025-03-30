@@ -4,6 +4,7 @@ import datetime
 import timeit
 from enum import Enum
 
+from encoder.SAT_encoder import SATEncoder
 from encoder.SAT_model import NUMBER_OF_LITERAL
 from encoder.problem import Problem
 
@@ -11,6 +12,7 @@ from encoder.problem import Problem
 class EncoderType(Enum):
     THESIS_2022 = 1
     STAIRCASE = 2
+    LIA = 3
 
 
 class InfoAttribute(Enum):
@@ -48,33 +50,40 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
                    f'{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv')
     log = f'log/{data_set_name}_{encoder_type.name}_{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.log'
 
-    match encoder_type:
-        case EncoderType.THESIS_2022:
-            from encoder.thesis_2022 import Thesis2022Encoder
-        case EncoderType.STAIRCASE:
-            from encoder.staircase import StaircaseEncoder
+    if encoder_type == EncoderType.STAIRCASE or encoder_type == EncoderType.THESIS_2022:
+        with open(output_name, "a+") as f:
+            f.write(
+                'file_name,'
+                'lb,'
+                'ub,'
+                'num_var,'
+                'num_clause,'
+                'num_consistency_clause,'
+                'num_PB_clause,'
+                'zero_lits,'
+                'one_lits,'
+                'two_lits,'
+                'three_lits,'
+                'four_lits,'
+                'five_to_ten,'
+                'more_than_ten,'
+                'feasible,'
+                'make_span,'
+                'total_solving_time,'
+                'optimized,'
+                'timeout\n')
 
-    with open(output_name, "a+") as f:
-        f.write(
-            'file_name,'
-            'lb,'
-            'ub,'
-            'num_var,'
-            'num_clause,'
-            'num_consistency_clause,'
-            'num_PB_clause,'
-            'zero_lits,'
-            'one_lits,'
-            'two_lits,'
-            'three_lits,'
-            'four_lits,'
-            'five_to_ten,'
-            'more_than_ten,'
-            'feasible,'
-            'make_span,'
-            'total_solving_time,'
-            'optimized,'
-            'timeout\n')
+    elif encoder_type == EncoderType.LIA:
+        with open(output_name, "a+") as f:
+            f.write(
+                'file_name,'
+                'lb,'
+                'ub,'
+                'feasible,'
+                'make_span,'
+                'total_solving_time,'
+                'optimized,'
+                'timeout\n')
 
     with open(f'bound/bound_{data_set_name}.csv', encoding='utf8') as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
@@ -89,35 +98,55 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
             p = Problem(file_name)
             encoder = None
             if encoder_type == EncoderType.STAIRCASE:
-                encoder = StaircaseEncoder(p, ub, timeout, verify)
+                from encoder.staircase import StaircaseSATEncoder
+                encoder = StaircaseSATEncoder(p, ub, timeout, verify)
             elif encoder_type == EncoderType.THESIS_2022:
-                encoder = Thesis2022Encoder(p, ub, timeout, verify)
+                from encoder.thesis_2022 import Thesis2022SATEncoder
+                encoder = Thesis2022SATEncoder(p, ub, timeout, verify)
+            elif encoder_type == EncoderType.LIA:
+                from encoder.LIA_encoder import LIAEncoder
+                encoder = LIAEncoder(p, ub, timeout, verify)
 
             encoder.encode()
+            result_info = None
 
-            result_info = {
-                'file_name': file_name,
-                'lb': lb,
-                'ub': ub,
-                'num_var': encoder.sat_model.number_of_variable,
-                'num_clause': encoder.sat_model.number_of_clause,
-                'num_consistency_clause': encoder.sat_model.number_of_consistency_clause,
-                'num_PB_clause': encoder.sat_model.number_of_PB_clause,
-                'zero_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.ZERO.value],
-                'one_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.ONE.value],
-                'two_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.TWO.value],
-                'three_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.THREE.value],
-                'four_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.FOUR.value],
-                'five_to_ten': encoder.sat_model.number_of_literal[
-                    NUMBER_OF_LITERAL.FIVE_TO_TEN.value],
-                'more_than_ten': encoder.sat_model.number_of_literal[
-                    NUMBER_OF_LITERAL.MORE_THAN_TEN.value],
-                'feasible': False,
-                'make_span': 0,
-                'total_solving_time': 0,
-                'optimized': False,
-                'timeout': False
-            }
+            if isinstance(encoder, SATEncoder):
+                result_info = {
+                    'file_name': file_name,
+                    'lb': lb,
+                    'ub': ub,
+                    'num_var': encoder.sat_model.number_of_variable,
+                    'num_clause': encoder.sat_model.number_of_clause,
+                    'num_consistency_clause': encoder.sat_model.number_of_consistency_clause,
+                    'num_PB_clause': encoder.sat_model.number_of_PB_clause,
+                    'zero_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.ZERO.value],
+                    'one_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.ONE.value],
+                    'two_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.TWO.value],
+                    'three_lits': encoder.sat_model.number_of_literal[
+                        NUMBER_OF_LITERAL.THREE.value],
+                    'four_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.FOUR.value],
+                    'five_to_ten': encoder.sat_model.number_of_literal[
+                        NUMBER_OF_LITERAL.FIVE_TO_TEN.value],
+                    'more_than_ten': encoder.sat_model.number_of_literal[
+                        NUMBER_OF_LITERAL.MORE_THAN_TEN.value],
+                    'feasible': False,
+                    'make_span': 0,
+                    'total_solving_time': 0,
+                    'optimized': False,
+                    'timeout': False
+                }
+
+            elif isinstance(encoder, LIAEncoder):
+                result_info = {
+                    'file_name': file_name,
+                    'lb': lb,
+                    'ub': ub,
+                    'fesible': False,
+                    'make_span': 0,
+                    'total_solving_time': 0,
+                    'optimized': False,
+                    'timeout': False
+                }
 
             sat = encoder.solve()
 
@@ -175,27 +204,40 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
                             f'{datetime.datetime.now()} {file_name} optimized with makespan:'
                             f' {result_info['make_span']} and time: {round(encoder.time_used, 5)}\n')
 
-            with open(output_name, "a+") as f:
-                f.write(
-                    f'{result_info["file_name"]},'
-                    f'{result_info["lb"]},'
-                    f'{result_info["ub"]},'
-                    f'{result_info["num_var"]},'
-                    f'{result_info["num_clause"]},'
-                    f'{result_info["num_consistency_clause"]},'
-                    f'{result_info["num_PB_clause"]},'
-                    f'{result_info["zero_lits"]},'
-                    f'{result_info["one_lits"]},'
-                    f'{result_info["two_lits"]},'
-                    f'{result_info["three_lits"]},'
-                    f'{result_info["four_lits"]},'
-                    f'{result_info["five_to_ten"]},'
-                    f'{result_info["more_than_ten"]},'
-                    f'{int(result_info["feasible"])},'
-                    f'{result_info["make_span"]},'
-                    f'{result_info["total_solving_time"]},'
-                    f'{int(result_info["optimized"])},'
-                    f'{int(result_info["timeout"])}\n')
+            if isinstance(encoder, SATEncoder):
+                with open(output_name, "a+") as f:
+                    f.write(
+                        f'{result_info["file_name"]},'
+                        f'{result_info["lb"]},'
+                        f'{result_info["ub"]},'
+                        f'{result_info["num_var"]},'
+                        f'{result_info["num_clause"]},'
+                        f'{result_info["num_consistency_clause"]},'
+                        f'{result_info["num_PB_clause"]},'
+                        f'{result_info["zero_lits"]},'
+                        f'{result_info["one_lits"]},'
+                        f'{result_info["two_lits"]},'
+                        f'{result_info["three_lits"]},'
+                        f'{result_info["four_lits"]},'
+                        f'{result_info["five_to_ten"]},'
+                        f'{result_info["more_than_ten"]},'
+                        f'{int(result_info["feasible"])},'
+                        f'{result_info["make_span"]},'
+                        f'{result_info["total_solving_time"]},'
+                        f'{int(result_info["optimized"])},'
+                        f'{int(result_info["timeout"])}\n')
+
+            elif isinstance(encoder, LIAEncoder):
+                with open(output_name, "a+") as f:
+                    f.write(
+                        f'{result_info["file_name"]},'
+                        f'{result_info["lb"]},'
+                        f'{result_info["ub"]},'
+                        f'{int(result_info["feasible"])},'
+                        f'{result_info["make_span"]},'
+                        f'{result_info["total_solving_time"]},'
+                        f'{int(result_info["optimized"])},'
+                        f'{int(result_info["timeout"])}\n')
 
         with open(log, "a+") as f:
             f.write(
@@ -206,7 +248,7 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
 def main():
     parser = argparse.ArgumentParser(description='Benchmarking script for SAT encoders.')
     parser.add_argument('dataset_name', type=str, help='The name of the dataset to benchmark.')
-    parser.add_argument('encoder_type', type=str, choices=['thesis', 'staircase'],
+    parser.add_argument('encoder_type', type=str, choices=['thesis', 'staircase', 'lia'],
                         help='The type of encoder to use: thesis for THESIS_2022, staircase for STAIRCASE.')
     parser.add_argument('timeout', type=int, help='Timeout for solving (0 for no timeout).')
     parser.add_argument('--verify', action='store_true', help='Verify the result after solving.')
@@ -216,6 +258,7 @@ def main():
     encoder_type_map = {
         'thesis': EncoderType.THESIS_2022,
         'staircase': EncoderType.STAIRCASE,
+        'lia': EncoderType.LIA
     }
 
     encoder_type = encoder_type_map[args.encoder_type]

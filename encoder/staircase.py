@@ -1,8 +1,12 @@
 from encoder.PB_constr import PBConstr
-from encoder.SAT_encoder import Encoder
+from encoder.SAT_encoder import SATEncoder
 
 
-class StaircaseEncoder(Encoder):
+class StaircaseSATEncoder(SATEncoder):
+    def __init__(self, problem, makespan: int, timeout: int = None, enable_verify: bool = False):
+        super().__init__(problem, makespan, timeout, enable_verify)
+        self.register: dict[tuple[int, ...], int] = {}
+
     def encode(self):
         self._resource_constraint()
         self._start_time_for_job_0()
@@ -17,17 +21,10 @@ class StaircaseEncoder(Encoder):
                 self.sat_model.add_clause(
                     [self._get_forward_staircase_register(successor, self.ES[successor],
                                                           self.LS[successor] + 1)])
-                # print([self._get_forward_staircase_register(successor,
-                #                                             self.ES[successor],
-                #                                             self.LS[successor] + 1)])
-
                 # Predecessor can only start at one time
                 self.sat_model.add_clause(
                     [self._get_backward_staircase_register(predecessor, self.ES[predecessor],
                                                            self.LS[predecessor] + 1)])
-                # print([self._get_backward_staircase_register(predecessor,
-                #                                              self.ES[predecessor],
-                #                                              self.LS[predecessor] + 1)])
 
                 # Precedence constraint
                 for k in range(self.ES[successor], self.LS[successor] + 1):
@@ -42,37 +39,35 @@ class StaircaseEncoder(Encoder):
                         continue
 
                     self.sat_model.add_clause([-first_half, -second_half])
-                    # print([-first_half, -second_half])
 
     def _get_forward_staircase_register(self, job: int, start: int, end: int) -> int | None:
         """Get forward staircase register for a job for a range of time [start, end)"""
         # Check if current job with provided start and end time is already in the register
         if start >= end:
             return None
-        temp = tuple(self.y[(job, s)] for s in range(start, end))
+        temp = tuple(self.start[(job, s)] for s in range(start, end))
         if temp in self.register:
             return self.register[temp]
 
         # Store the start time of the job
         accumulative = []
         for s in range(start, end):
-            accumulative.append(self.y[(job, s)])
+            accumulative.append(self.start[(job, s)])
             current_tuple = tuple(accumulative)
             # If the current tuple is not in the register, create a new variable
             if current_tuple not in self.register:
                 # Create a new variable for the current tuple
                 self.register[current_tuple] = self.sat_model.get_new_var()
-                # print(f'{current_tuple} - > {self.register[current_tuple]}')
 
                 # Create constraint for staircase
 
                 # If current tuple is true then the register associated with it must be true
                 self.sat_model.add_clause(
-                    [-self.y[(job, s)], self.register[current_tuple]])
+                    [-self.start[(job, s)], self.register[current_tuple]])
 
                 if s == start:
                     self.sat_model.add_clause(
-                        [self.y[(job, s)], -self.register[current_tuple]])
+                        [self.start[(job, s)], -self.register[current_tuple]])
                 else:
                     # Get the previous tuple
                     previous_tuple = tuple(accumulative[:-1])
@@ -82,12 +77,12 @@ class StaircaseEncoder(Encoder):
 
                     # Both previous tuple and current variable is false then current tuple must be false
                     self.sat_model.add_clause(
-                        [self.register[previous_tuple], self.y[job, s],
+                        [self.register[previous_tuple], self.start[job, s],
                          -self.register[current_tuple]])
 
                     # Previous tuple and current variable must not be true at the same time
                     self.sat_model.add_clause(
-                        [-self.register[previous_tuple], -self.y[(job, s)]])
+                        [-self.register[previous_tuple], -self.start[(job, s)]])
 
         return self.register[temp]
 
@@ -96,29 +91,28 @@ class StaircaseEncoder(Encoder):
         # Check if current job with provided start and end time is already in the register
         if start >= end:
             return None
-        temp = tuple(self.y[(job, s)] for s in range(end - 1, start - 1, -1))
+        temp = tuple(self.start[(job, s)] for s in range(end - 1, start - 1, -1))
         if temp in self.register:
             return self.register[temp]
 
         accumulative = []
         for s in range(end - 1, start - 1, -1):
-            accumulative.append(self.y[(job, s)])
+            accumulative.append(self.start[(job, s)])
             current_tuple = tuple(accumulative)
             # If the current tuple is not in the register, create a new variable
             if current_tuple not in self.register:
                 # Create a new variable for the current tuple
                 self.register[current_tuple] = self.sat_model.get_new_var()
-                # print(f'{current_tuple} - > {self.register[current_tuple]}')
 
                 # Create constraint for staircase
 
                 # If current tuple is true then the register associated with it must be true
                 self.sat_model.add_clause(
-                    [-self.y[(job, s)], self.register[current_tuple]])
+                    [-self.start[(job, s)], self.register[current_tuple]])
 
                 if s == end - 1:
                     self.sat_model.add_clause(
-                        [self.y[(job, s)], -self.register[current_tuple]])
+                        [self.start[(job, s)], -self.register[current_tuple]])
 
                 else:
                     # Get the previous tuple
@@ -129,12 +123,12 @@ class StaircaseEncoder(Encoder):
 
                     # Both previous tuple and current variable is false then current tuple must be false
                     self.sat_model.add_clause(
-                        [self.register[previous_tuple], self.y[job, s],
+                        [self.register[previous_tuple], self.start[job, s],
                          -self.register[current_tuple]])
 
                     # Previous tuple and current variable must not be true at the same time
                     self.sat_model.add_clause(
-                        [-self.register[previous_tuple], -self.y[(job, s)]])
+                        [-self.register[previous_tuple], -self.start[(job, s)]])
 
         return self.register[temp]
 
@@ -144,23 +138,23 @@ class StaircaseEncoder(Encoder):
                 pb_constraint = PBConstr(self.sat_model, self.problem.capacities[r])
                 for i in range(self.problem.njobs):
                     if t in range(self.ES[i], self.LC[i] + 1):
-                        pb_constraint.add_term(self.x[(i, t)], self.problem.requests[i][r])
+                        pb_constraint.add_term(self.run[(i, t)], self.problem.requests[i][r])
                 pb_constraint.encode()
 
     def _redundant_constraint(self):
         for i in range(self.problem.njobs):
             for c in range(self.EC[i], self.LC[i]):
                 self.sat_model.add_clause(
-                    [-self.x[(i, c)], self.x[(i, c + 1)],
-                     self.y[(i, c - self.problem.durations[i] + 1)]])
+                    [-self.run[(i, c)], self.run[(i, c + 1)],
+                     self.start[(i, c - self.problem.durations[i] + 1)]])
 
     def _consistency_constraint(self):
         for i in range(self.problem.njobs):
             for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
                 for t in range(s, s + self.problem.durations[i]):
                     self.sat_model.add_clause(
-                        [-self.y[(i, s)], self.x[(i, t)]])
+                        [-self.start[(i, s)], self.run[(i, t)]])
                     self.sat_model.number_of_consistency_clause += 1
 
     def _start_time_for_job_0(self):
-        self.sat_model.add_clause([self.y[(0, 0)]])
+        self.sat_model.add_clause([self.start[(0, 0)]])

@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pysat.solvers import Glucose42
+from pysat.solvers import Glucose4
 
 
 class NUMBER_OF_LITERAL(Enum):
@@ -20,7 +20,7 @@ class SATModel:
         self.number_of_PB_clause = 0
         self.number_of_consistency_clause = 0
         self.number_of_literal = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 11: 0}
-        self.solver = Glucose42(use_timer=True)
+        self.solver = Glucose4(use_timer=True, incr=True)
 
     def get_new_var(self) -> int:
         self.number_of_variable += 1

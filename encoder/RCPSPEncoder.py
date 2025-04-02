@@ -98,7 +98,7 @@ class RCPSPEncoder:
         After calling this method, you will need to call solve() method to solve problem with new makespan."""
         raise NotImplementedError()
 
-    def get_result(self):
+    def get_solution(self):
         """Get the result of the problem where the result is a list of start times for each activity."""
         raise NotImplementedError()
 
@@ -107,7 +107,7 @@ class RCPSPEncoder:
         if not self.enable_verify:
             return
         # Get start time
-        solution = self.get_result()
+        solution = self.get_solution()
 
         # Check precedence constraint
         for job in range(self.problem.njobs):

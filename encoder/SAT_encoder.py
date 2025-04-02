@@ -71,7 +71,7 @@ class SATEncoder(RCPSPEncoder):
         self.makespan -= 1
         self.solution = None
 
-    def get_result(self) -> list[int]:
+    def get_solution(self) -> list[int]:
         """Get the result of the problem where the result is a list of start times for each activity."""
         if self.sat_model.solver.get_model() is None:
             raise Exception(

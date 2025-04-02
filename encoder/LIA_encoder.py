@@ -1,6 +1,6 @@
 from z3 import Int, Bool, And, Implies, sat, unsat, If
 
-from encoder.LIAModel import LIAModel
+from encoder.LIA_model import LIAModel
 from encoder.RCPSPEncoder import RCPSPEncoder
 
 
@@ -90,12 +90,12 @@ class LIAEncoder(RCPSPEncoder):
                 self.assumptions.add(self.run[consistency_variable] == False)
 
         for start_variable in self.start.keys():
-            self.assumptions.add(self.start[start_variable] <= self.makespan)
+            self.assumptions.add(self.start[start_variable] < self.makespan)
 
         self.makespan -= 1
         self.solution = None
 
-    def get_result(self) -> list[int]:
+    def get_solution(self) -> list[int]:
         """Get the result of the problem where the result is a list of start times for each activity."""
         return [self.lia_model.solver.model()[self.start[i]].as_long() for i in
                 range(self.problem.njobs)]

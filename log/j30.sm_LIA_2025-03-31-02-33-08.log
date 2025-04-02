@@ -1,0 +1,48 @@
+2025-03-31 02:33:08.836217 benchmark for data_set/j30.sm/j301_1.sm using LIA started
+2025-03-31 02:33:10.302978 data_set/j30.sm/j301_1.sm feasible with makespan: 60 and time: 0.073
+2025-03-31 02:33:10.424257 data_set/j30.sm/j301_1.sm feasible with makespan: 59 and time: 0.186
+2025-03-31 02:33:10.575702 data_set/j30.sm/j301_1.sm feasible with makespan: 58 and time: 0.329
+2025-03-31 02:33:10.655307 data_set/j30.sm/j301_1.sm feasible with makespan: 57 and time: 0.399
+2025-03-31 02:33:10.677944 data_set/j30.sm/j301_1.sm feasible with makespan: 56 and time: 0.414
+2025-03-31 02:33:10.698296 data_set/j30.sm/j301_1.sm feasible with makespan: 55 and time: 0.424
+2025-03-31 02:33:10.718679 data_set/j30.sm/j301_1.sm feasible with makespan: 54 and time: 0.434
+2025-03-31 02:33:10.755452 data_set/j30.sm/j301_1.sm feasible with makespan: 53 and time: 0.453
+2025-03-31 02:33:10.801300 data_set/j30.sm/j301_1.sm feasible with makespan: 52 and time: 0.487
+2025-03-31 02:33:10.950283 data_set/j30.sm/j301_1.sm feasible with makespan: 51 and time: 0.625
+2025-03-31 02:33:10.973842 data_set/j30.sm/j301_1.sm feasible with makespan: 50 and time: 0.639
+2025-03-31 02:33:11.186549 data_set/j30.sm/j301_1.sm feasible with makespan: 49 and time: 0.84
+2025-03-31 02:33:11.214382 data_set/j30.sm/j301_1.sm feasible with makespan: 48 and time: 0.856
+2025-03-31 02:33:11.281691 data_set/j30.sm/j301_1.sm feasible with makespan: 47 and time: 0.91
+2025-03-31 02:33:11.370016 data_set/j30.sm/j301_1.sm feasible with makespan: 46 and time: 0.984
+2025-03-31 02:33:11.421476 data_set/j30.sm/j301_1.sm feasible with makespan: 45 and time: 1.022
+2025-03-31 02:33:11.466307 data_set/j30.sm/j301_1.sm feasible with makespan: 44 and time: 1.054
+2025-03-31 02:33:11.494374 data_set/j30.sm/j301_1.sm feasible with makespan: 43 and time: 1.068
+2025-03-31 02:33:11.495730 data_set/j30.sm/j301_1.sm optimized with makespan: 43 and time: 1.068
+2025-03-31 02:33:11.498584 benchmark for data_set/j30.sm/j301_2.sm using LIA started
+2025-03-31 02:33:12.591890 data_set/j30.sm/j301_2.sm feasible with makespan: 47 and time: 0.048
+2025-03-31 02:33:12.593299 data_set/j30.sm/j301_2.sm optimized with makespan: 47 and time: 0.048
+2025-03-31 02:33:12.595673 benchmark for data_set/j30.sm/j301_3.sm using LIA started
+2025-03-31 02:33:12.956620 data_set/j30.sm/j301_3.sm feasible with makespan: 47 and time: 0.048
+2025-03-31 02:33:12.958942 data_set/j30.sm/j301_3.sm optimized with makespan: 47 and time: 0.048
+2025-03-31 02:33:12.962490 benchmark for data_set/j30.sm/j301_4.sm using LIA started
+2025-03-31 02:33:14.378209 data_set/j30.sm/j301_4.sm feasible with makespan: 62 and time: 0.062
+2025-03-31 02:33:14.380308 data_set/j30.sm/j301_4.sm optimized with makespan: 62 and time: 0.062
+2025-03-31 02:33:14.382952 benchmark for data_set/j30.sm/j301_5.sm using LIA started
+2025-03-31 02:33:15.359749 data_set/j30.sm/j301_5.sm feasible with makespan: 39 and time: 0.051
+2025-03-31 02:33:15.361112 data_set/j30.sm/j301_5.sm optimized with makespan: 39 and time: 0.051
+2025-03-31 02:33:15.363485 benchmark for data_set/j30.sm/j301_6.sm using LIA started
+2025-03-31 02:33:16.497000 data_set/j30.sm/j301_6.sm feasible with makespan: 48 and time: 0.052
+2025-03-31 02:33:16.499892 data_set/j30.sm/j301_6.sm optimized with makespan: 48 and time: 0.052
+2025-03-31 02:33:16.503164 benchmark for data_set/j30.sm/j301_7.sm using LIA started
+2025-03-31 02:33:17.895468 data_set/j30.sm/j301_7.sm feasible with makespan: 60 and time: 0.061
+2025-03-31 02:33:17.897653 data_set/j30.sm/j301_7.sm optimized with makespan: 60 and time: 0.061
+2025-03-31 02:33:17.900795 benchmark for data_set/j30.sm/j301_8.sm using LIA started
+2025-03-31 02:33:19.137023 data_set/j30.sm/j301_8.sm feasible with makespan: 53 and time: 0.056
+2025-03-31 02:33:19.138919 data_set/j30.sm/j301_8.sm optimized with makespan: 53 and time: 0.056
+2025-03-31 02:33:19.142235 benchmark for data_set/j30.sm/j301_9.sm using LIA started
+2025-03-31 02:33:20.315379 data_set/j30.sm/j301_9.sm feasible with makespan: 49 and time: 0.054
+2025-03-31 02:33:20.316868 data_set/j30.sm/j301_9.sm optimized with makespan: 49 and time: 0.054
+2025-03-31 02:33:20.319935 benchmark for data_set/j30.sm/j301_10.sm using LIA started
+2025-03-31 02:33:21.369896 data_set/j30.sm/j301_10.sm feasible with makespan: 45 and time: 0.05
+2025-03-31 02:33:21.371142 data_set/j30.sm/j301_10.sm optimized with makespan: 45 and time: 0.05
+2025-03-31 02:33:21.375201 benchmark for data_set/j30.sm/j302_1.sm using LIA started

@@ -141,7 +141,7 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
                     'file_name': file_name,
                     'lb': lb,
                     'ub': ub,
-                    'fesible': False,
+                    'feasible': False,
                     'make_span': 0,
                     'total_solving_time': 0,
                     'optimized': False,
@@ -155,7 +155,7 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
                 with open(log, "a+") as f:
                     f.write(
                         f'{datetime.datetime.now()} {file_name} timeout while checking makespan: '
-                        f'{encoder.makespan} and time: {round(encoder.time_used, 5)}\n')
+                        f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}\n')
 
             elif sat:
                 encoder.verify()
@@ -166,7 +166,7 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
 
                 with open(log, "a+") as f:
                     f.write(f'{datetime.datetime.now()} {file_name} feasible with makespan: '
-                            f'{encoder.makespan} and time: {round(encoder.time_used, 5)}\n')
+                            f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}\n')
 
                 while sat and encoder.makespan > lb:
                     encoder.decrease_makespan()
@@ -177,7 +177,7 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
                         with open(log, "a+") as f:
                             f.write(
                                 f'{datetime.datetime.now()} {file_name} timeout while checking makespan: '
-                                f'{encoder.makespan} and time: {round(encoder.time_used, 5)}\n')
+                                f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}\n')
                         break
                     elif sat:
                         encoder.verify()
@@ -186,7 +186,7 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
                         with open(log, "a+") as f:
                             f.write(
                                 f'{datetime.datetime.now()} {file_name} feasible with makespan: '
-                                f'{encoder.makespan} and time: {round(encoder.time_used, 5)}\n')
+                                f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}\n')
                     else:
                         with open(log, "a+") as f:
                             f.write(
@@ -194,7 +194,7 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
                                 f'{encoder.makespan} and time: {round(encoder.time_used, 5)}\n')
                             f.write(
                                 f'{datetime.datetime.now()} {file_name} optimized with makespan:'
-                                f'{result_info['make_span']} and time: {round(encoder.time_used, 5)}\n')
+                                f'{result_info['make_span']} with total running time: {round(encoder.time_used, 5)}\n')
                         result_info['optimized'] = True
                         break
                 else:
@@ -202,7 +202,7 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
                     with open(log, "a+") as f:
                         f.write(
                             f'{datetime.datetime.now()} {file_name} optimized with makespan:'
-                            f' {result_info['make_span']} and time: {round(encoder.time_used, 5)}\n')
+                            f' {result_info['make_span']} with total running time: {round(encoder.time_used, 5)}\n')
 
             if isinstance(encoder, SATEncoder):
                 with open(output_name, "a+") as f:

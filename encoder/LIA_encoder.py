@@ -70,7 +70,7 @@ class LIAEncoder(RCPSPEncoder):
 
         for k, v in self.lia_model.solver.statistics():
             if k == "time":
-                self.time_used = v
+                self.time_used += v
                 break
 
         if result == sat:

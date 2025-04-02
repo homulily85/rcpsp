@@ -1,14 +1,8 @@
-[English](#english)|[Tiếng Việt](#tiếng-việt)
-## Notes
-- test.py is used for testing purposes.
-- benchmark.py is used to benchmark the performance of encoders.
-- For staircase and thesis encoders, you need to run on Linux (as the pypblib library doesn't work on Windows).
-
-## Command Line Arguments
-
+[English](#english) | [Tiếng Việt](#tiếng-việt)
 ## English
 ### Notes
 - test.py is used for testing purposes.
+- benchmark.py is used to benchmark the performance of encoders.
 - For staircase and thesis encoders, you need to run on Linux (as the pypblib library doesn't work on Windows).
 ### Command Line Arguments
 ```

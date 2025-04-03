@@ -1,7 +1,7 @@
 from z3 import Int, Bool, And, Implies, sat, unsat, If
 
 from encoder.LIA_model import LIAModel
-from encoder.RCPSPEncoder import RCPSPEncoder
+from encoder.RCPSP_Encoder import RCPSPEncoder
 
 
 class LIAEncoder(RCPSPEncoder):

@@ -24,7 +24,6 @@ class RCPSPEncoder:
         self.enable_verify = enable_verify
         self.solution = None
 
-
     def _create_variable(self):
         """Create variables for the problem."""
         raise NotImplementedError()
@@ -105,7 +104,8 @@ class RCPSPEncoder:
     def verify(self):
         """Verify the solution of the problem."""
         if not self.enable_verify:
-            return
+            raise Exception(
+                "Verification is not enabled. Set enable_verify to True to enable verification.")
         # Get start time
         solution = self.get_solution()
 

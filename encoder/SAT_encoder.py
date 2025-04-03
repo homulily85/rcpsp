@@ -1,6 +1,6 @@
 from threading import Timer
 
-from encoder.RCPSPEncoder import RCPSPEncoder
+from encoder.RCPSP_Encoder import RCPSPEncoder
 from encoder.SAT_model import SATModel
 from encoder.problem import Problem
 
@@ -78,8 +78,15 @@ class SATEncoder(RCPSPEncoder):
                 f"This problem is unsatisfiable with the current makespan {self.makespan}")
         sol = []
         for i in range(self.problem.njobs):
+            start_time_found = False
             for s in range(self.ES[i], self.LS[i] + 1):
                 if self.sat_model.solver.get_model()[self.start[(i, s)] - 1] > 0:
                     sol.append(s)
+                    start_time_found = True
                     break
+            if not start_time_found:
+                raise Exception(
+                    f"Start time for activity {i} not found in the solution with makespan {self.makespan}"
+                )
         return sol
+

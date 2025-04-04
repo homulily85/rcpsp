@@ -83,7 +83,8 @@ class ResultManager:
     def _initialize_output_file(self):
         """Create the output file with appropriate headers based on encoder type."""
         with open(self.output_path, "a+") as f:
-            if self.encoder_type in [EncoderType.STAIRCASE, EncoderType.THESIS_2022, EncoderType.NEW_STAIRCASE]:
+            if self.encoder_type in [EncoderType.STAIRCASE, EncoderType.THESIS_2022,
+                                     EncoderType.NEW_STAIRCASE]:
                 f.write(
                     'file_name,'
                     'lb,'
@@ -118,7 +119,8 @@ class ResultManager:
     def save_result(self, result_info: Dict[str, Any]):
         """Save benchmark results to the output file."""
         with open(self.output_path, "a+") as f:
-            if self.encoder_type in [EncoderType.STAIRCASE, EncoderType.THESIS_2022, EncoderType.NEW_STAIRCASE]:
+            if self.encoder_type in [EncoderType.STAIRCASE, EncoderType.THESIS_2022,
+                                     EncoderType.NEW_STAIRCASE]:
                 f.write(
                     f'{result_info["file_name"]},'
                     f'{result_info["lb"]},'
@@ -161,7 +163,7 @@ class BenchmarkRunner:
     """Runs the benchmark process for a dataset using specified encoder."""
 
     def __init__(self, data_set_name: str, encoder_type: EncoderType,
-                 timeout: Optional[int], verify: bool, verbose: bool = False,
+                 timeout: Optional[int], verify: bool = False, verbose: bool = False,
                  show_solution: bool = False):
         self.data_set_name = data_set_name
         self.encoder_type = encoder_type
@@ -398,4 +400,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

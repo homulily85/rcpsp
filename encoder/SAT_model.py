@@ -22,6 +22,9 @@ class SATModel:
         self.number_of_literal = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 11: 0}
         self.solver = Glucose4(use_timer=True, incr=True)
 
+    def set_start_value(self, start_value: int) -> None:
+        self.number_of_variable = start_value
+
     def get_new_var(self) -> int:
         self.number_of_variable += 1
         return self.number_of_variable

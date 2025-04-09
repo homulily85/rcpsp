@@ -1,16 +1,18 @@
 from encoder.problem import Problem
 from encoder.staircase import StaircaseSATEncoder
+from encoder.staircase_SCPB import StaircaseSCPBSATEncoder
 from encoder.staircase_new import NewStaircaseSATEncoder
 
 # p = Problem('data_set/pack_d/Pack_d031.rcp')
-# p = Problem('data_set/data_set_test/test_2022.sm')
+# p = Problem('data_set/data_set_test/test_2020.sm')
 p = Problem('data_set/j30.sm/j301_1.sm')
-e = NewStaircaseSATEncoder(p, 43, enable_verify=True)
+e = StaircaseSCPBSATEncoder(p, 43, enable_verify=True)
 e.encode()
 sat = e.solve()
 while sat:
     print('Feasible with makespan:', e.makespan)
     print(e.get_solution())
+    e.draw_schedule()
     e.verify()
     print('Verify passed')
     # print('Number of variables:', e.sat_model.number_of_variable)
@@ -20,3 +22,4 @@ while sat:
 else:
     print('Unfeasible with makespan:', e.makespan)
     print('Total time:', e.time_used)
+

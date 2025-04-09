@@ -101,6 +101,18 @@ class RCPSPEncoder:
         """Get the result of the problem where the result is a list of start times for each activity."""
         raise NotImplementedError()
 
+    def draw_schedule(self):
+        schedule = self.get_solution()
+        chart = {}
+        for job, start_time in enumerate(schedule):
+            duration = self.problem.durations[job]
+            chart[job] = [' '] * self.makespan
+            for t in range(start_time, start_time + duration):
+                chart[job][t] = '#'
+
+        for job in sorted(chart.keys()):
+            print(f"Job {job}: {''.join(chart[job])}")
+
     def verify(self):
         """Verify the solution of the problem."""
         if not self.enable_verify:
@@ -128,4 +140,3 @@ class RCPSPEncoder:
                     print(f"Failed when check resource constraint for resource {r} at t = {t}"
                           f" while checking {self.problem.name}")
                     exit(-1)
-

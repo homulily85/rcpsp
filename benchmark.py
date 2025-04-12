@@ -4,11 +4,16 @@ import datetime
 import os
 import timeit
 from enum import Enum
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional
 
-from encoder.SAT_encoder import SATEncoder
-from encoder.SAT_model import NUMBER_OF_LITERAL
+from encoder.lia.LIA_encoder import LIAEncoder
 from encoder.problem import Problem
+from encoder.sat.incremental_sat.SAT_encoder import SATEncoder
+from encoder.sat.incremental_sat.SAT_model import NUMBER_OF_LITERAL
+from encoder.sat.incremental_sat.staircase import StaircaseSATEncoder
+from encoder.sat.incremental_sat.staircase_new import NewStaircaseSATEncoder
+from encoder.sat.incremental_sat.thesis_2022 import Thesis2022SATEncoder
+from encoder.sat.max_sat.MaxSAT_encoder import MaxSATEncoder, SOLVER_STATUS
 
 
 class EncoderType(Enum):
@@ -16,26 +21,7 @@ class EncoderType(Enum):
     STAIRCASE = 2
     LIA = 3
     NEW_STAIRCASE = 4
-
-
-class InfoAttribute(Enum):
-    LB = 0
-    UB = 1
-    NUM_VAR = 2
-    NUM_CLAUSE = 3
-    NUM_CONSISTENCY_ClAUSE = 4
-    NUM_PB_CLAUSE = 5
-    FEASIBLE = 6
-    MAKE_SPAN = 7
-    TOTAL_SOLVING_TIME = 8
-    OPTIMIZED = 9
-    ZERO_LITS = 10
-    ONE_LITS = 11
-    TWO_LITS = 12
-    THREE_LITS = 13
-    FOUR_LITS = 14
-    MORE_THAN_FOUR_LITS = 15
-    MORE_THAN_TEN_LITS = 16
+    MAXSAT = 5
 
 
 class BenchmarkLogger:
@@ -115,6 +101,29 @@ class ResultManager:
                     'total_solving_time,'
                     'optimized,'
                     'timeout\n')
+            elif self.encoder_type == EncoderType.MAXSAT:
+                f.write(
+                    'file_name,'
+                    'lb,'
+                    'ub,'
+                    'num_var,'
+                    'num_clause,'
+                    'num_soft_constraint,'
+                    'num_hard_constraint,'
+                    'num_consistency_clause,'
+                    'num_PB_clause,'
+                    'zero_lits,'
+                    'one_lits,'
+                    'two_lits,'
+                    'three_lits,'
+                    'four_lits,'
+                    'five_to_ten,'
+                    'more_than_ten,'
+                    'feasible,'
+                    'make_span,'
+                    'total_solving_time,'
+                    'optimized,'
+                    'timeout\n')
 
     def save_result(self, result_info: Dict[str, Any]):
         """Save benchmark results to the output file."""
@@ -151,8 +160,31 @@ class ResultManager:
                     f'{result_info["total_solving_time"]},'
                     f'{int(result_info["optimized"])},'
                     f'{int(result_info["timeout"])}\n')
+            elif self.encoder_type == EncoderType.MAXSAT:
+                f.write(
+                    f'{result_info["file_name"]},'
+                    f'{result_info["lb"]},'
+                    f'{result_info["ub"]},'
+                    f'{result_info["num_var"]},'
+                    f'{result_info["num_clause"]},'
+                    f'{result_info["num_soft_constraint"]},'
+                    f'{result_info["num_hard_constraint"]},'
+                    f'{result_info["num_consistency_clause"]},'
+                    f'{result_info["num_PB_clause"]},'
+                    f'{result_info["zero_lits"]},'
+                    f'{result_info["one_lits"]},'
+                    f'{result_info["two_lits"]},'
+                    f'{result_info["three_lits"]},'
+                    f'{result_info["four_lits"]},'
+                    f'{result_info["five_to_ten"]},'
+                    f'{result_info["more_than_ten"]},'
+                    f'{int(result_info["feasible"])},'
+                    f'{result_info["make_span"]},'
+                    f'{result_info["total_solving_time"]},'
+                    f'{int(result_info["optimized"])},'
+                    f'{int(result_info["timeout"])}\n')
 
-    def save_solution(self, file_name: str, solution: str):
+    def save_solution(self, file_name: str, solution: list[int]):
         """Save solution to solution file if enabled."""
         if self.show_solution and self.solution_file:
             with open(self.solution_file, "a+") as f:
@@ -179,24 +211,29 @@ class BenchmarkRunner:
         self.logger = BenchmarkLogger(log_file, verbose)
         self.result_manager = ResultManager(output_name, encoder_type, show_solution)
 
-    def create_encoder(self, problem: Problem, upper_bound: int) -> Union[SATEncoder, 'LIAEncoder']:
+    def create_encoder(self, problem: Problem,
+                       upper_bound: int,
+                       lower_bound: int) -> NewStaircaseSATEncoder | Thesis2022SATEncoder | StaircaseSATEncoder | LIAEncoder | MaxSATEncoder:
         """Factory method to create the appropriate encoder."""
         if self.encoder_type == EncoderType.STAIRCASE:
-            from encoder.staircase import StaircaseSATEncoder
+            from encoder.sat.incremental_sat.staircase import StaircaseSATEncoder
             return StaircaseSATEncoder(problem, upper_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.THESIS_2022:
-            from encoder.thesis_2022 import Thesis2022SATEncoder
+            from encoder.sat.incremental_sat.thesis_2022 import Thesis2022SATEncoder
             return Thesis2022SATEncoder(problem, upper_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.LIA:
-            from encoder.LIA_encoder import LIAEncoder
+            from encoder.lia.LIA_encoder import LIAEncoder
             return LIAEncoder(problem, upper_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.NEW_STAIRCASE:
-            from encoder.staircase_new import NewStaircaseSATEncoder
+            from encoder.sat.incremental_sat.staircase_new import NewStaircaseSATEncoder
             return NewStaircaseSATEncoder(problem, upper_bound, self.timeout, self.verify)
+        elif self.encoder_type == EncoderType.MAXSAT:
+            from encoder.sat.max_sat.MaxSAT_encoder import MaxSATEncoder
+            return MaxSATEncoder(problem, upper_bound, lower_bound, self.timeout, self.verify)
         else:
             raise ValueError(f"Unknown encoder type: {self.encoder_type}")
 
-    def create_result_info(self, file_name: str, lb: int, ub: int, encoder) -> Dict[str, Any]:
+    def create_result_info(self, file_name: str, lb: int, ub: int, encoder):
         """Create initial result info dictionary based on encoder type."""
         if isinstance(encoder, SATEncoder):
             return {
@@ -222,11 +259,37 @@ class BenchmarkRunner:
                 'optimized': False,
                 'timeout': False
             }
-        else:  # LIAEncoder
+        elif isinstance(encoder, LIAEncoder):  # LIAEncoder
             return {
                 'file_name': file_name,
                 'lb': lb,
                 'ub': ub,
+                'feasible': False,
+                'make_span': 0,
+                'total_solving_time': 0,
+                'optimized': False,
+                'timeout': False
+            }
+        elif isinstance(encoder, MaxSATEncoder):
+            return {
+                'file_name': file_name,
+                'lb': lb,
+                'ub': ub,
+                'num_var': encoder.sat_model.number_of_variable,
+                'num_clause': encoder.sat_model.number_of_clause,
+                'num_soft_constraint': encoder.sat_model.number_of_soft_clause,
+                'num_hard_constraint': encoder.sat_model.number_of_hard_clause,
+                'num_consistency_clause': encoder.sat_model.number_of_consistency_clause,
+                'num_PB_clause': encoder.sat_model.number_of_PB_clause,
+                'zero_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.ZERO.value],
+                'one_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.ONE.value],
+                'two_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.TWO.value],
+                'three_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.THREE.value],
+                'four_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.FOUR.value],
+                'five_to_ten': encoder.sat_model.number_of_literal[
+                    NUMBER_OF_LITERAL.FIVE_TO_TEN.value],
+                'more_than_ten': encoder.sat_model.number_of_literal[
+                    NUMBER_OF_LITERAL.MORE_THAN_TEN.value],
                 'feasible': False,
                 'make_span': 0,
                 'total_solving_time': 0,
@@ -240,7 +303,7 @@ class BenchmarkRunner:
 
         # Create problem and encoder
         problem = Problem(file_name)
-        encoder = self.create_encoder(problem, ub)
+        encoder = self.create_encoder(problem, ub, lb)
 
         # Encode the problem
         encoder.encode()
@@ -259,6 +322,41 @@ class BenchmarkRunner:
     def _solve_and_optimize(self, encoder, result_info: Dict[str, Any], file_name: str):
         """Solve the problem and optimize the makespan."""
         # Initial solve
+        if isinstance(encoder, MaxSATEncoder):
+            sat = encoder.solve()
+            match sat:
+                case SOLVER_STATUS.UNKNOWN.value:
+                    result_info['timeout'] = True
+                    self.logger.log(f'{file_name} timeout while checking makespan: '
+                                    f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}s')
+                    return
+                case SOLVER_STATUS.UNSATISFIABLE.value:
+                    result_info['feasible'] = False
+                    result_info['total_solving_time'] = round(encoder.time_used, 5)
+                    self.logger.log(f'{file_name} unfeasible with makespan: '
+                                    f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}s')
+                    return
+                case SOLVER_STATUS.SATISFIABLE.value:
+                    result_info['feasible'] = True
+                    result_info['optimized'] = False
+                    result_info['timeout'] = True
+                    result_info['make_span'] = encoder.makespan
+                    result_info['total_solving_time'] = round(encoder.time_used, 5)
+                    self.logger.log(f'{file_name} feasible with makespan: '
+                                    f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}s '
+                                    f'but cannot find optimal solution.')
+                    return
+                case SOLVER_STATUS.OPTIMUM.value:
+                    result_info['feasible'] = True
+                    result_info['optimized'] = True
+                    result_info['timeout'] = False
+                    result_info['make_span'] = encoder.makespan
+                    result_info['total_solving_time'] = round(encoder.time_used, 5)
+                    self.logger.log(f'{file_name} feasible with makespan: '
+                                    f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}s. '
+                                    f'This is the optimal solution.')
+                    return
+
         sat = encoder.solve()
 
         if sat is None:
@@ -369,7 +467,7 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmarking script for SAT encoders.')
     parser.add_argument('dataset_name', type=str, help='The name of the dataset to benchmark.')
     parser.add_argument('encoder_type', type=str,
-                        choices=['thesis', 'staircase', 'lia', 'new_staircase'],
+                        choices=['thesis', 'staircase', 'lia', 'new_staircase', 'maxsat'],
                         help='The type of encoder to use: thesis for THESIS_2022, staircase for STAIRCASE.')
     parser.add_argument('timeout', type=int, help='Timeout for solving (0 for no timeout).')
     parser.add_argument('--show_solution', action='store_true',
@@ -384,7 +482,8 @@ def main():
         'thesis': EncoderType.THESIS_2022,
         'staircase': EncoderType.STAIRCASE,
         'lia': EncoderType.LIA,
-        'new_staircase': EncoderType.NEW_STAIRCASE
+        'new_staircase': EncoderType.NEW_STAIRCASE,
+        'maxsat': EncoderType.MAXSAT
     }
 
     encoder_type = encoder_type_map[args.encoder_type]

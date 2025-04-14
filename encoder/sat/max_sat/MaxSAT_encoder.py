@@ -35,6 +35,7 @@ class MaxSATEncoder(RCPSPEncoder):
         self.makespan_var = {}
 
         self.register: dict[tuple[int, ...], int] = {}
+        self._temp_forward_register = {}  # Cache for forward staircase computations
         self._preprocessing()
 
     def _preprocessing(self):
@@ -96,11 +97,14 @@ class MaxSATEncoder(RCPSPEncoder):
             case 30:
                 self.return_code = SOLVER_STATUS.OPTIMUM.value
             case 20:
-                self.return_code = SOLVER_STATUS.SATISFIABLE.value
-            case 10:
                 self.return_code = SOLVER_STATUS.UNSATISFIABLE.value
+            case 10:
+                self.return_code = SOLVER_STATUS.SATISFIABLE.value
             case _:
                 self.return_code = SOLVER_STATUS.UNKNOWN
+
+        os.remove('wcnf/' + file_name)
+        os.remove('out/' + file_name + '.out')
 
         return self.return_code
 
@@ -159,7 +163,7 @@ class MaxSATEncoder(RCPSPEncoder):
 
     def _soft_constraint(self):
         for t in range(self.lower_bound, self.upper_bound + 1):
-            self.sat_model.add_soft_clause([-self.makespan_var[t]], self.upper_bound - t + 1)
+            self.sat_model.add_soft_clause([-self.makespan_var[t]], 1)
 
     def _get_last_execute_job(self):
         tmp = []
@@ -187,14 +191,23 @@ class MaxSATEncoder(RCPSPEncoder):
     def _precedence_constraint(self):
         for predecessor in range(1, self.problem.njobs):
             for successor in self.problem.successors[predecessor]:
+                # Get forward staircase registers once for reuse
+                successor_register = self._get_forward_staircase_register(successor,
+                                                                          self.ES[successor],
+                                                                          self.LS[successor] + 1)
+                predecessor_register = self._get_forward_staircase_register(predecessor,
+                                                                            self.ES[predecessor],
+                                                                            self.LS[
+                                                                                predecessor] + 1)
+
+                # Skip if registers aren't valid
+                if successor_register is None or predecessor_register is None:
+                    continue
+
                 # Successor can only start at one time
-                self.sat_model.add_hard_clause(
-                    [self._get_forward_staircase_register(successor, self.ES[successor],
-                                                          self.LS[successor] + 1)])
+                self.sat_model.add_hard_clause([successor_register])
                 # Predecessor can only start at one time
-                self.sat_model.add_hard_clause(
-                    [self._get_forward_staircase_register(predecessor, self.ES[predecessor],
-                                                          self.LS[predecessor] + 1)])
+                self.sat_model.add_hard_clause([predecessor_register])
 
                 # Precedence constraint
                 for k in range(self.ES[successor], self.LS[successor] + 1):
@@ -202,29 +215,45 @@ class MaxSATEncoder(RCPSPEncoder):
                                                                       self.ES[successor],
                                                                       k + 1)
 
-                    if first_half is None or k - self.problem.durations[predecessor] + 1 >= self.LS[
-                        predecessor] + 1:
+                    if first_half is None:
                         continue
 
-                    self.sat_model.add_hard_clause(
-                        [-first_half,
-                         -self.start[predecessor, k - self.problem.durations[predecessor] + 1]])
-                else:
-                    for k in range(self.LS[successor] - self.problem.durations[predecessor] + 2,
-                                   self.LS[predecessor] + 1):
+                    pred_time = k - self.problem.durations[predecessor] + 1
+                    # Skip if predecessor time is out of range
+                    if pred_time >= self.LS[predecessor] + 1:
+                        continue
+
+                    # Check if predecessor can start at this time
+                    if pred_time >= self.ES[predecessor]:
                         self.sat_model.add_hard_clause(
-                            [-self._get_forward_staircase_register(successor, self.ES[successor],
-                                                                   self.LS[successor] + 1),
-                             -self.start[predecessor, k]])
+                            [-first_half, -self.start[predecessor, pred_time]])
+
+                # Handle remaining predecessor times that would violate the precedence constraint
+                # This is separate from the loop above and not an "else" clause
+                latest_valid_pred_start = self.LS[successor] - self.problem.durations[
+                    predecessor] + 1
+                for k in range(latest_valid_pred_start + 1, self.LS[predecessor] + 1):
+                    if k < self.ES[predecessor]:
+                        continue
+                    self.sat_model.add_hard_clause(
+                        [-successor_register, -self.start[predecessor, k]])
 
     def _get_forward_staircase_register(self, job: int, start: int, end: int) -> int | None:
         """Get forward staircase register for a job for a range of time [start, end)"""
         # Check if current job with provided start and end time is already in the register
         if start >= end:
             return None
+
+        # Use cached result if available
+        key = (job, start, end)
+        if key in self._temp_forward_register:
+            return self._temp_forward_register[key]
+
         temp = tuple(self.start[(job, s)] for s in range(start, end))
         if temp in self.register:
-            return self.register[temp]
+            result = self.register[temp]
+            self._temp_forward_register[key] = result
+            return result
 
         # Store the start time of the job
         accumulative = []
@@ -261,7 +290,9 @@ class MaxSATEncoder(RCPSPEncoder):
                     self.sat_model.add_hard_clause(
                         [-self.register[previous_tuple], -self.start[(job, s)]])
 
-        return self.register[temp]
+        result = self.register[temp]
+        self._temp_forward_register[key] = result
+        return result
 
     def _resource_constraint(self):
         for t in range(self.makespan):

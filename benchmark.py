@@ -371,6 +371,13 @@ class BenchmarkRunner:
                     self.logger.log(f'{file_name} feasible with makespan: '
                                     f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}s '
                                     f'but cannot find optimal solution.')
+                    # Retrieve and save solution if show_solution is enabled
+                    if self.show_solution:
+                        try:
+                            self.solution = encoder.get_solution()
+                            self.result_manager.save_solution(file_name, self.solution)
+                        except Exception as e:
+                            self.logger.log(f'Error getting solution: {str(e)}')
                     return
                 case SOLVER_STATUS.OPTIMUM.value:
                     result_info['feasible'] = True
@@ -381,73 +388,80 @@ class BenchmarkRunner:
                     self.logger.log(f'{file_name} feasible with makespan: '
                                     f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}s. '
                                     f'This is the optimal solution.')
+                    # Retrieve and save solution if show_solution is enabled
+                    if self.show_solution:
+                        try:
+                            self.solution = encoder.get_solution()
+                            self.result_manager.save_solution(file_name, self.solution)
+                        except Exception as e:
+                            self.logger.log(f'Error getting solution: {str(e)}')
                     return
+        else:
+            sat = encoder.solve()
 
-        sat = encoder.solve()
-
-        if sat is None:
-            result_info['timeout'] = True
-            self.logger.log(f'{file_name} timeout while checking makespan: '
-                            f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
-            if self.show_solution and result_info['feasible']:
-                self.result_manager.save_solution(file_name, self.solution)
-            return
-
-        if sat:
-            # Solution found - verify and update result info
-            encoder.verify()
-            result_info['feasible'] = True
-            result_info['make_span'] = encoder.makespan
-            result_info['total_solving_time'] = round(encoder.time_used, 5)
-            if self.show_solution:
-                self.solution = encoder.get_solution()
-            self.logger.log(f'{file_name} feasible with makespan: '
-                            f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
-
-            # Try to optimize by decreasing makespan
-            while sat and encoder.makespan > result_info['lb']:
-                encoder.decrease_makespan()
-                sat = encoder.solve()
-
-                if sat is None:
-                    # Timeout during optimization
-                    result_info['timeout'] = True
-                    self.logger.log(f'{file_name} timeout while checking makespan: '
-                                    f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
-
-                    if self.show_solution and result_info['feasible']:
-                        self.result_manager.save_solution(file_name, self.solution)
-                    break
-
-                elif sat:
-                    # Better solution found
-                    encoder.verify()
-                    result_info['make_span'] = encoder.makespan
-                    result_info['total_solving_time'] = round(encoder.time_used, 5)
-                    if self.show_solution:
-                        self.solution = encoder.get_solution()
-                    self.logger.log(f'{file_name} feasible with makespan: '
-                                    f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
-
-                else:
-                    # No better solution - optimal found
-                    self.logger.log(f'{file_name} unfeasible with makespan: '
-                                    f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
-                    self.logger.log(f'{file_name} optimized with makespan:'
-                                    f'{result_info["make_span"]} with total running time: {round(encoder.time_used, 5)}')
-                    result_info['optimized'] = True
-
-                    if self.show_solution:
-                        self.result_manager.save_solution(file_name, self.solution)
-                    break
-            else:
-                # Reached lower bound - optimal solution
-                result_info['optimized'] = True
-                self.logger.log(f'{file_name} optimized with makespan:'
-                                f' {result_info["make_span"]} with total running time: {round(encoder.time_used, 5)}')
-
-                if self.show_solution:
+            if sat is None:
+                result_info['timeout'] = True
+                self.logger.log(f'{file_name} timeout while checking makespan: '
+                                f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
+                if self.show_solution and result_info['feasible']:
                     self.result_manager.save_solution(file_name, self.solution)
+                return
+
+            if sat:
+                # Solution found - verify and update result info
+                encoder.verify()
+                result_info['feasible'] = True
+                result_info['make_span'] = encoder.makespan
+                result_info['total_solving_time'] = round(encoder.time_used, 5)
+                if self.show_solution:
+                    self.solution = encoder.get_solution()
+                self.logger.log(f'{file_name} feasible with makespan: '
+                                f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
+
+                # Try to optimize by decreasing makespan
+                while sat and encoder.makespan > result_info['lb']:
+                    encoder.decrease_makespan()
+                    sat = encoder.solve()
+
+                    if sat is None:
+                        # Timeout during optimization
+                        result_info['timeout'] = True
+                        self.logger.log(f'{file_name} timeout while checking makespan: '
+                                        f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
+
+                        if self.show_solution and result_info['feasible']:
+                            self.result_manager.save_solution(file_name, self.solution)
+                        break
+
+                    elif sat:
+                        # Better solution found
+                        encoder.verify()
+                        result_info['make_span'] = encoder.makespan
+                        result_info['total_solving_time'] = round(encoder.time_used, 5)
+                        if self.show_solution:
+                            self.solution = encoder.get_solution()
+                        self.logger.log(f'{file_name} feasible with makespan: '
+                                        f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
+
+                    else:
+                        # No better solution - optimal found
+                        self.logger.log(f'{file_name} unfeasible with makespan: '
+                                        f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
+                        self.logger.log(f'{file_name} optimized with makespan:'
+                                        f'{result_info["make_span"]} with total running time: {round(encoder.time_used, 5)}')
+                        result_info['optimized'] = True
+
+                        if self.show_solution:
+                            self.result_manager.save_solution(file_name, self.solution)
+                        break
+                else:
+                    # Reached lower bound - optimal solution
+                    result_info['optimized'] = True
+                    self.logger.log(f'{file_name} optimized with makespan:'
+                                    f' {result_info["make_span"]} with total running time: {round(encoder.time_used, 5)}')
+
+                    if self.show_solution:
+                        self.result_manager.save_solution(file_name, self.solution)
 
     def run(self):
         """Run the benchmark for all instances in the dataset."""

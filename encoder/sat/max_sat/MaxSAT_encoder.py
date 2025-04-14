@@ -159,7 +159,7 @@ class MaxSATEncoder(RCPSPEncoder):
 
     def _soft_constraint(self):
         for t in range(self.lower_bound, self.upper_bound + 1):
-            self.sat_model.add_soft_clause([-self.makespan_var[t]], 1)
+            self.sat_model.add_soft_clause([-self.makespan_var[t]], self.upper_bound - t + 1)
 
     def _get_last_execute_job(self):
         tmp = []

@@ -104,6 +104,7 @@ class RCPSPEncoder:
     def verify(self):
         """Verify the solution of the problem."""
         if not self.enable_verify:
+            print("Verification is not enabled.")
             return  # Do nothing if verification is not enabled
         # Get start time
         solution = self.get_solution()
@@ -128,4 +129,3 @@ class RCPSPEncoder:
                     print(f"Failed when check resource constraint for resource {r} at t = {t}"
                           f" while checking {self.problem.name}")
                     exit(-1)
-

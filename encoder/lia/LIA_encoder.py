@@ -85,6 +85,9 @@ class LIAEncoder(RCPSPEncoder):
         It should be called after encode() and solve() methods.
         After calling this method, you will need to call solve() method to solve problem with new makespan."""
 
+        # Reset assumptions before adding new ones to prevent accumulation
+        self.assumptions.clear()
+        
         for consistency_variable in self.run.keys():
             if self.makespan in consistency_variable:
                 self.assumptions.add(self.run[consistency_variable] == False)
@@ -99,3 +102,20 @@ class LIAEncoder(RCPSPEncoder):
         """Get the result of the problem where the result is a list of start times for each activity."""
         return [self.lia_model.solver.model()[self.start[i]].as_long() for i in
                 range(self.problem.njobs)]
+                
+    def cleanup(self):
+        """Release solver resources to prevent memory leaks"""
+        if hasattr(self, 'lia_model') and self.lia_model is not None:
+            # Clear solver and all associated constraints
+            self.lia_model.solver.reset()
+            # Clear our reference to the model
+            self.lia_model = None
+            
+        # Clear variable references
+        self.start.clear()
+        self.run.clear()
+        self.assumptions.clear()
+        
+    def __del__(self):
+        """Destructor to ensure resources are released"""
+        self.cleanup()

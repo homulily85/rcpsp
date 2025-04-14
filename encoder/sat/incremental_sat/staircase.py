@@ -6,6 +6,8 @@ class StaircaseSATEncoder(SATEncoder):
     def __init__(self, problem, makespan: int, timeout: int = None, enable_verify: bool = False):
         super().__init__(problem, makespan, timeout, enable_verify)
         self.register: dict[tuple[int, ...], int] = {}
+        self._temp_forward_register = {}  # Cache for forward staircase computations
+        self._temp_backward_register = {}  # Cache for backward staircase computations
 
     def encode(self):
         self._resource_constraint()
@@ -13,6 +15,13 @@ class StaircaseSATEncoder(SATEncoder):
         self._precedence_constraint()
         self._consistency_constraint()
         self._redundant_constraint()
+        self._clear_register()  # Clear register after encoding to free memory
+
+    def _clear_register(self):
+        """Clear the register to free memory after encoding is complete"""
+        self.register.clear()
+        self._temp_forward_register.clear()
+        self._temp_backward_register.clear()
 
     def _precedence_constraint(self):
         for predecessor in range(1, self.problem.njobs):
@@ -39,15 +48,27 @@ class StaircaseSATEncoder(SATEncoder):
                         continue
 
                     self.sat_model.add_clause([-first_half, -second_half])
+                
+                # Clear temporary caches after processing each predecessor-successor pair
+                self._temp_forward_register.clear()
+                self._temp_backward_register.clear()
 
     def _get_forward_staircase_register(self, job: int, start: int, end: int) -> int | None:
         """Get forward staircase register for a job for a range of time [start, end)"""
         # Check if current job with provided start and end time is already in the register
         if start >= end:
             return None
+            
+        # Use cached result if available
+        key = (job, start, end)
+        if key in self._temp_forward_register:
+            return self._temp_forward_register[key]
+            
         temp = tuple(self.start[(job, s)] for s in range(start, end))
         if temp in self.register:
-            return self.register[temp]
+            result = self.register[temp]
+            self._temp_forward_register[key] = result
+            return result
 
         # Store the start time of the job
         accumulative = []
@@ -84,16 +105,26 @@ class StaircaseSATEncoder(SATEncoder):
                     self.sat_model.add_clause(
                         [-self.register[previous_tuple], -self.start[(job, s)]])
 
-        return self.register[temp]
+        result = self.register[temp]
+        self._temp_forward_register[key] = result
+        return result
 
     def _get_backward_staircase_register(self, job: int, start: int, end: int) -> int | None:
         """Get backward staircase register for a job for a range of time [start, end)"""
         # Check if current job with provided start and end time is already in the register
         if start >= end:
             return None
+            
+        # Use cached result if available
+        key = (job, start, end)
+        if key in self._temp_backward_register:
+            return self._temp_backward_register[key]
+            
         temp = tuple(self.start[(job, s)] for s in range(end - 1, start - 1, -1))
         if temp in self.register:
-            return self.register[temp]
+            result = self.register[temp]
+            self._temp_backward_register[key] = result
+            return result
 
         accumulative = []
         for s in range(end - 1, start - 1, -1):
@@ -130,7 +161,9 @@ class StaircaseSATEncoder(SATEncoder):
                     self.sat_model.add_clause(
                         [-self.register[previous_tuple], -self.start[(job, s)]])
 
-        return self.register[temp]
+        result = self.register[temp]
+        self._temp_backward_register[key] = result
+        return result
 
     def _resource_constraint(self):
         for t in range(self.makespan):

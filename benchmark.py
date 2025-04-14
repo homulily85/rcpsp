@@ -3,6 +3,7 @@ import csv
 import datetime
 import os
 import timeit
+import gc  # Added for explicit garbage collection
 from enum import Enum
 from typing import Dict, Any, Optional
 
@@ -203,6 +204,8 @@ class BenchmarkRunner:
         self.verify = verify
         self.verbose = verbose
         self.show_solution = show_solution
+        self.solution = None
+        self.encoder = None  # Track encoder instance for cleanup
 
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         output_name = f'result/{data_set_name}_{encoder_type.name}_{timestamp}.csv'
@@ -297,27 +300,50 @@ class BenchmarkRunner:
                 'timeout': False
             }
 
+    def cleanup_resources(self):
+        """Cleanup resources to prevent memory leaks."""
+        if self.encoder:
+            # Release any references held by the encoder
+            if hasattr(self.encoder, 'cleanup'):
+                self.encoder.cleanup()
+            # Clear reference to large objects
+            if hasattr(self.encoder, 'sat_model'):
+                self.encoder.sat_model = None
+            if hasattr(self.encoder, 'solver'):
+                self.encoder.solver = None
+            
+        # Clear solution data
+        self.solution = None
+        self.encoder = None
+        
+        # Force garbage collection
+        gc.collect()
+
     def process_instance(self, file_name: str, lb: int, ub: int):
         """Process a single problem instance."""
-        self.logger.log(f'benchmark for {file_name} using {self.encoder_type.name} started')
+        try:
+            self.logger.log(f'benchmark for {file_name} using {self.encoder_type.name} started')
 
-        # Create problem and encoder
-        problem = Problem(file_name)
-        encoder = self.create_encoder(problem, ub, lb)
+            # Create problem and encoder
+            problem = Problem(file_name)
+            self.encoder = self.create_encoder(problem, ub, lb)
 
-        # Encode the problem
-        encoder.encode()
+            # Encode the problem
+            self.encoder.encode()
 
-        # Create initial result info
-        result_info = self.create_result_info(file_name, lb, ub, encoder)
+            # Create initial result info
+            result_info = self.create_result_info(file_name, lb, ub, self.encoder)
 
-        # Solve the problem
-        self._solve_and_optimize(encoder, result_info, file_name)
+            # Solve the problem
+            self._solve_and_optimize(self.encoder, result_info, file_name)
 
-        # Save results
-        self.result_manager.save_result(result_info)
+            # Save results
+            self.result_manager.save_result(result_info)
 
-        return result_info
+            return result_info
+        finally:
+            # Clean up resources for this instance
+            self.cleanup_resources()
 
     def _solve_and_optimize(self, encoder, result_info: Dict[str, Any], file_name: str):
         """Solve the problem and optimize the makespan."""
@@ -364,7 +390,7 @@ class BenchmarkRunner:
             self.logger.log(f'{file_name} timeout while checking makespan: '
                             f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
             if self.show_solution and result_info['feasible']:
-                self.result_manager.save_solution(file_name, encoder.get_solution())
+                self.result_manager.save_solution(file_name, self.solution)
             return
 
         if sat:
@@ -373,7 +399,8 @@ class BenchmarkRunner:
             result_info['feasible'] = True
             result_info['make_span'] = encoder.makespan
             result_info['total_solving_time'] = round(encoder.time_used, 5)
-
+            if self.show_solution:
+                self.solution = encoder.get_solution()
             self.logger.log(f'{file_name} feasible with makespan: '
                             f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
 
@@ -389,7 +416,7 @@ class BenchmarkRunner:
                                     f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
 
                     if self.show_solution and result_info['feasible']:
-                        self.result_manager.save_solution(file_name, encoder.get_solution())
+                        self.result_manager.save_solution(file_name, self.solution)
                     break
 
                 elif sat:
@@ -397,6 +424,8 @@ class BenchmarkRunner:
                     encoder.verify()
                     result_info['make_span'] = encoder.makespan
                     result_info['total_solving_time'] = round(encoder.time_used, 5)
+                    if self.show_solution:
+                        self.solution = encoder.get_solution()
                     self.logger.log(f'{file_name} feasible with makespan: '
                                     f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
 
@@ -409,7 +438,7 @@ class BenchmarkRunner:
                     result_info['optimized'] = True
 
                     if self.show_solution:
-                        self.result_manager.save_solution(file_name, encoder.get_solution())
+                        self.result_manager.save_solution(file_name, self.solution)
                     break
             else:
                 # Reached lower bound - optimal solution
@@ -418,26 +447,32 @@ class BenchmarkRunner:
                                 f' {result_info["make_span"]} with total running time: {round(encoder.time_used, 5)}')
 
                 if self.show_solution:
-                    self.result_manager.save_solution(file_name, encoder.get_solution())
+                    self.result_manager.save_solution(file_name, self.solution)
 
     def run(self):
         """Run the benchmark for all instances in the dataset."""
         start = timeit.default_timer()
 
-        # Read bounds from CSV file
-        with open(f'bound/bound_{self.data_set_name}.csv', encoding='utf8') as csv_file:
-            csv_reader = csv.reader(csv_file, delimiter=',')
-            for row in csv_reader:
-                file_name = f'data_set/{self.data_set_name}/{row[0]}'
-                lb = int(row[1])
-                ub = int(row[2])
+        try:
+            # Read bounds from CSV file
+            with open(f'bound/bound_{self.data_set_name}.csv', encoding='utf8') as csv_file:
+                csv_reader = csv.reader(csv_file, delimiter=',')
+                for row in csv_reader:
+                    file_name = f'data_set/{self.data_set_name}/{row[0]}'
+                    lb = int(row[1])
+                    ub = int(row[2])
 
-                self.process_instance(file_name, lb, ub)
+                    self.process_instance(file_name, lb, ub)
+                    # Force garbage collection after each instance
+                    gc.collect()
 
-        total_time = round(timeit.default_timer() - start, 5)
-        self.logger.log(f'Benchmark using {self.encoder_type.name} '
-                        f'finished with total running time {total_time}')
-        return total_time
+            total_time = round(timeit.default_timer() - start, 5)
+            self.logger.log(f'Benchmark using {self.encoder_type.name} '
+                            f'finished with total running time {total_time}')
+            return total_time
+        finally:
+            # Final cleanup
+            self.cleanup_resources()
 
 
 def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verify: bool,
@@ -452,15 +487,19 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
         verbose: (bool) Display logs in terminal when True.
         show_solution: (bool) Save the best solution to a file when True.
     """
-    runner = BenchmarkRunner(
-        data_set_name=data_set_name,
-        encoder_type=encoder_type,
-        timeout=None if timeout == 0 else timeout,
-        verify=verify,
-        verbose=verbose,
-        show_solution=show_solution
-    )
-    return runner.run()
+    try:
+        runner = BenchmarkRunner(
+            data_set_name=data_set_name,
+            encoder_type=encoder_type,
+            timeout=None if timeout == 0 else timeout,
+            verify=verify,
+            verbose=verbose,
+            show_solution=show_solution
+        )
+        return runner.run()
+    finally:
+        # Force garbage collection after benchmark completes
+        gc.collect()
 
 
 def main():
@@ -499,3 +538,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

@@ -343,6 +343,7 @@ class BenchmarkRunner:
                     result_info['timeout'] = True
                     result_info['make_span'] = encoder.get_makespan()
                     result_info['total_solving_time'] = round(encoder.time_used, 5)
+                    self.result_manager.save_solution(file_name, encoder.get_solution())
                     self.logger.log(f'{file_name} feasible with makespan: '
                                     f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}s '
                                     f'but cannot find optimal solution.')
@@ -353,6 +354,7 @@ class BenchmarkRunner:
                     result_info['timeout'] = False
                     result_info['make_span'] = encoder.get_makespan()
                     result_info['total_solving_time'] = round(encoder.time_used, 5)
+                    self.result_manager.save_solution(file_name, encoder.get_solution())
                     self.logger.log(f'{file_name} feasible with makespan: '
                                     f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}s. '
                                     f'This is the optimal solution.')
@@ -365,7 +367,7 @@ class BenchmarkRunner:
                 self.logger.log(f'{file_name} timeout while checking makespan: '
                                 f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
                 if self.show_solution and result_info['feasible']:
-                    self.result_manager.save_solution(file_name, encoder.get_solution())
+                    self.result_manager.save_solution(file_name, self.solution)
                 return
 
             if sat:

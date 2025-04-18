@@ -1,8 +1,8 @@
 from threading import Timer
 
 from encoder.RCPSP_Encoder import RCPSPEncoder
-from encoder.sat.incremental_sat.SAT_model import SATModel
 from encoder.problem import Problem
+from encoder.sat.incremental_sat.SAT_model import SATModel
 
 
 class SATEncoder(RCPSPEncoder):
@@ -62,12 +62,7 @@ class SATEncoder(RCPSPEncoder):
         """This method is used to decrease the makespan of the problem.
         It should be called after encode() and solve() methods.
         After calling this method, you will need to call solve() method to solve problem with new makespan."""
-        for consistency_variable in self.run.keys():
-            if self.makespan in consistency_variable:
-                self.assumptions.add(-self.run[consistency_variable])
-        for start_variable in self.start.keys():
-            if start_variable[1] >= self.makespan:
-                self.assumptions.add(-self.start[start_variable])
+        self.assumptions.add(-self.start[self.problem.njobs - 1, self.makespan])
         self.makespan -= 1
         self.solution = None
 
@@ -76,6 +71,9 @@ class SATEncoder(RCPSPEncoder):
         if self.sat_model.solver.get_model() is None:
             raise Exception(
                 f"This problem is unsatisfiable with the current makespan {self.makespan}")
+
+        if self.solution is not None:
+            return self.solution
         sol = []
         for i in range(self.problem.njobs):
             start_time_found = False
@@ -89,4 +87,3 @@ class SATEncoder(RCPSPEncoder):
                     f"Start time for activity {i} not found in the solution with makespan {self.makespan}"
                 )
         return sol
-

@@ -36,3 +36,6 @@ class SATModel:
         else:
             self.number_of_literal[len(clause)] += 1
 
+    def clean(self):
+        self.number_of_literal.clear()
+        self.solver.delete()

@@ -125,10 +125,11 @@ class MaxSATEncoder(RCPSPEncoder):
             raise Exception("No solution found")
 
         # Parse the solution from the output file
-        solution = self.parse_solution()
-        return solution
+        if self.solution is None:
+            self.solution = self._parse_solution()
+        return self.solution
 
-    def parse_solution(self) -> list[int]:
+    def _parse_solution(self) -> list[int]:
         """
         Parse the solution from the output file and extract start times for each activity.
         
@@ -159,8 +160,6 @@ class MaxSATEncoder(RCPSPEncoder):
             if var_id <= len(solution_string) and solution_string[var_id - 1] == '1':
                 result[job] = time
 
-        self.makespan = max(result)
-
         return result
 
     def encode(self):
@@ -176,13 +175,6 @@ class MaxSATEncoder(RCPSPEncoder):
         for t in range(self.lower_bound, self.upper_bound + 1):
             self.sat_model.add_soft_clause([-self.makespan_var[t]], 1)
 
-    def _get_last_execute_job(self):
-        tmp = []
-        for job in range(self.problem.njobs):
-            if self.problem.successors[job] == [self.problem.njobs - 1]:
-                tmp.append(job)
-        return tmp
-
     def _hard_constraint(self):
         for t in range(self.lower_bound, self.upper_bound + 1):
             if self.ES[self.problem.njobs - 1] <= t <= self.LS[self.problem.njobs - 1]:
@@ -191,13 +183,6 @@ class MaxSATEncoder(RCPSPEncoder):
 
         for t in range(self.lower_bound, self.upper_bound):
             self.sat_model.add_hard_clause([self.makespan_var[t], -self.makespan_var[t + 1]])
-
-        last_job = self._get_last_execute_job()
-        for t in range(self.lower_bound, self.upper_bound + 1):
-            for job in last_job:
-                if self.ES[job] <= t <= self.LS[job]:
-                    self.sat_model.add_hard_clause([self.makespan_var[t], -self.run[(job, t)]])
-                    # self.sat_model.add_hard_clause([-self.makespan_var[t], self.run[(job, t)]])
 
     def _precedence_constraint(self):
         for predecessor in range(1, self.problem.njobs):

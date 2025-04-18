@@ -46,7 +46,9 @@ class BenchmarkLogger:
 class ResultManager:
     """Manages result output and solution files."""
 
-    def __init__(self, output_path: str, encoder_type: EncoderType, show_solution: bool = False):
+    def __init__(self, output_path: str,
+                 encoder_type: EncoderType,
+                 show_solution: bool = False):
         self.output_path = output_path
         self.encoder_type = encoder_type
         self.show_solution = show_solution
@@ -63,8 +65,6 @@ class ResultManager:
             solution_dir = 'solution'
             os.makedirs(solution_dir, exist_ok=True)
             self.solution_file = f'{solution_dir}/{os.path.basename(output_path).replace(".csv", ".sol")}'
-            with open(self.solution_file, "a+") as f:
-                f.write('file_name,make_span,solution\n')
 
     def _initialize_output_file(self):
         """Create the output file with appropriate headers based on encoder type."""
@@ -194,8 +194,11 @@ class ResultManager:
 class BenchmarkRunner:
     """Runs the benchmark process for a dataset using specified encoder."""
 
-    def __init__(self, data_set_name: str, encoder_type: EncoderType,
-                 timeout: Optional[int], verify: bool = False, verbose: bool = False,
+    def __init__(self, data_set_name: str,
+                 encoder_type: EncoderType,
+                 timeout: Optional[int],
+                 verify: bool = False,
+                 verbose: bool = False,
                  show_solution: bool = False):
         self.data_set_name = data_set_name
         self.encoder_type = encoder_type
@@ -214,7 +217,11 @@ class BenchmarkRunner:
 
     def create_encoder(self, problem: Problem,
                        upper_bound: int,
-                       lower_bound: int) -> NewStaircaseSATEncoder | Thesis2022SATEncoder | StaircaseSATEncoder | LIAEncoder | MaxSATEncoder:
+                       lower_bound: int) -> (NewStaircaseSATEncoder |
+                                             Thesis2022SATEncoder |
+                                             StaircaseSATEncoder |
+                                             LIAEncoder |
+                                             MaxSATEncoder):
         """Factory method to create the appropriate encoder."""
         if self.encoder_type == EncoderType.STAIRCASE:
             from encoder.sat.incremental_sat.staircase import StaircaseSATEncoder
@@ -234,7 +241,11 @@ class BenchmarkRunner:
         else:
             raise ValueError(f"Unknown encoder type: {self.encoder_type}")
 
-    def create_result_info(self, file_name: str, lb: int, ub: int, encoder):
+    def create_result_info(self, file_name: str,
+                           lb: int,
+                           ub: int,
+                           encoder: SATEncoder | LIAEncoder | MaxSATEncoder) \
+            -> Dict[str, str | int] | None:
         """Create initial result info dictionary based on encoder type."""
         if isinstance(encoder, SATEncoder):
             return {
@@ -271,7 +282,7 @@ class BenchmarkRunner:
                 'optimized': False,
                 'timeout': False
             }
-        elif isinstance(encoder, MaxSATEncoder):
+        elif isinstance(encoder, MaxSATEncoder):  # MaxSATEncoder
             return {
                 'file_name': file_name,
                 'lb': lb,
@@ -297,6 +308,7 @@ class BenchmarkRunner:
                 'optimized': False,
                 'timeout': False
             }
+        return None
 
     def process_instance(self, file_name: str, lb: int, ub: int):
         """Process a single problem instance."""
@@ -318,9 +330,10 @@ class BenchmarkRunner:
         # Save results
         self.result_manager.save_result(result_info)
 
-        return result_info
 
-    def _solve_and_optimize(self, encoder, result_info: Dict[str, Any], file_name: str):
+    def _solve_and_optimize(self, encoder: SATEncoder | LIAEncoder | MaxSATEncoder,
+                            result_info: Dict[str, Any],
+                            file_name: str):
         """Solve the problem and optimize the makespan."""
         # Initial solve
         if isinstance(encoder, MaxSATEncoder):
@@ -328,14 +341,15 @@ class BenchmarkRunner:
             match sat:
                 case SOLVER_STATUS.UNKNOWN:
                     result_info['timeout'] = True
-                    self.logger.log(f'{file_name} timeout while checking makespan: '
-                                    f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}s')
+                    result_info['total_solving_time'] = round(encoder.time_used, 5)
+                    self.logger.log(f'{file_name} timeout, '
+                                    f'total running time: {round(encoder.time_used, 5)}s')
                     return
                 case SOLVER_STATUS.UNSATISFIABLE:
                     result_info['feasible'] = False
                     result_info['total_solving_time'] = round(encoder.time_used, 5)
-                    self.logger.log(f'{file_name} unfeasible with makespan: '
-                                    f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}s')
+                    self.logger.log(f'{file_name} unfeasible within given bounds, '
+                                    f'total running time: {round(encoder.time_used, 5)}s')
                     return
                 case SOLVER_STATUS.SATISFIABLE:
                     result_info['feasible'] = True
@@ -345,7 +359,7 @@ class BenchmarkRunner:
                     result_info['total_solving_time'] = round(encoder.time_used, 5)
                     self.result_manager.save_solution(file_name, encoder.get_solution())
                     self.logger.log(f'{file_name} feasible with makespan: '
-                                    f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}s '
+                                    f'{encoder.get_makespan()}, total running time: {round(encoder.time_used, 5)}s '
                                     f'but cannot find optimal solution.')
                     return
                 case SOLVER_STATUS.OPTIMUM:
@@ -356,16 +370,17 @@ class BenchmarkRunner:
                     result_info['total_solving_time'] = round(encoder.time_used, 5)
                     self.result_manager.save_solution(file_name, encoder.get_solution())
                     self.logger.log(f'{file_name} feasible with makespan: '
-                                    f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}s. '
+                                    f'{encoder.get_makespan()}, total running time: {round(encoder.time_used, 5)}s. '
                                     f'This is the optimal solution.')
                     return
+
         else:
             sat = encoder.solve()
 
             if sat is None:
                 result_info['timeout'] = True
                 self.logger.log(f'{file_name} timeout while checking makespan: '
-                                f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
+                                f'{encoder.makespan}, total running time: {round(encoder.time_used, 5)}')
                 if self.show_solution and result_info['feasible']:
                     self.result_manager.save_solution(file_name, self.solution)
                 return
@@ -380,7 +395,7 @@ class BenchmarkRunner:
                     self.solution = encoder.get_solution()
 
                 self.logger.log(f'{file_name} feasible with makespan: '
-                                f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
+                                f'{encoder.makespan}, total running time: {round(encoder.time_used, 5)}')
 
                 # Try to optimize by decreasing makespan
                 while sat and encoder.makespan > result_info['lb']:
@@ -391,7 +406,7 @@ class BenchmarkRunner:
                         # Timeout during optimization
                         result_info['timeout'] = True
                         self.logger.log(f'{file_name} timeout while checking makespan: '
-                                        f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
+                                        f'{encoder.makespan}, total running time: {round(encoder.time_used, 5)}')
 
                         if self.show_solution and result_info['feasible']:
                             self.result_manager.save_solution(file_name, self.solution)
@@ -405,14 +420,14 @@ class BenchmarkRunner:
                         if self.show_solution:
                             self.solution = encoder.get_solution()
                         self.logger.log(f'{file_name} feasible with makespan: '
-                                        f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
+                                        f'{encoder.makespan}, total running time: {round(encoder.time_used, 5)}')
 
                     else:
                         # No better solution - optimal found
                         self.logger.log(f'{file_name} unfeasible with makespan: '
                                         f'{encoder.makespan} with total running time: {round(encoder.time_used, 5)}')
                         self.logger.log(f'{file_name} optimized with makespan:'
-                                        f'{result_info["make_span"]} with total running time: {round(encoder.time_used, 5)}')
+                                        f'{result_info["make_span"]}, total running time: {round(encoder.time_used, 5)}')
                         result_info['optimized'] = True
 
                         if self.show_solution:
@@ -422,7 +437,7 @@ class BenchmarkRunner:
                     # Reached lower bound - optimal solution
                     result_info['optimized'] = True
                     self.logger.log(f'{file_name} optimized with makespan:'
-                                    f' {result_info["make_span"]} with total running time: {round(encoder.time_used, 5)}')
+                                    f' {result_info["make_span"]}, total running time: {round(encoder.time_used, 5)}')
 
                     if self.show_solution:
                         self.result_manager.save_solution(file_name, self.solution)
@@ -443,12 +458,15 @@ class BenchmarkRunner:
 
         total_time = round(timeit.default_timer() - start, 5)
         self.logger.log(f'Benchmark using {self.encoder_type.name} '
-                        f'finished with total running time {total_time}')
-        return total_time
+                        f'finished, total running time {total_time}')
 
 
-def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verify: bool,
-              verbose: bool = False, show_solution: bool = False):
+def benchmark(data_set_name: str,
+              encoder_type: EncoderType,
+              timeout: int,
+              verify: bool,
+              verbose: bool = False,
+              show_solution: bool = False):
     """
     Run the benchmark for the given dataset and encoder type.
     Args:
@@ -467,15 +485,15 @@ def benchmark(data_set_name: str, encoder_type: EncoderType, timeout: int, verif
         verbose=verbose,
         show_solution=show_solution
     )
-    return runner.run()
-
+    runner.run()
 
 def main():
     parser = argparse.ArgumentParser(description='Benchmarking script for SAT encoders.')
     parser.add_argument('dataset_name', type=str, help='The name of the dataset to benchmark.')
     parser.add_argument('encoder_type', type=str,
                         choices=['thesis', 'staircase', 'lia', 'new_staircase', 'maxsat'],
-                        help='The type of encoder to use: thesis for THESIS_2022, staircase for STAIRCASE.')
+                        help='The type of encoder to use: thesis for THESIS_2022, staircase for STAIRCASE, '
+                             'lia for LIA, new_staircase for NEW_STAIRCASE, maxsat for MAXSAT.')
     parser.add_argument('timeout', type=int, help='Timeout for solving (0 for no timeout).')
     parser.add_argument('--show_solution', action='store_true',
                         help='Show the solution after solving.')
@@ -502,7 +520,6 @@ def main():
               args.show_solution)
     print(
         f'Benchmark for {args.dataset_name} using {encoder_type.name} finished at {datetime.datetime.now()}')
-
 
 if __name__ == '__main__':
     main()

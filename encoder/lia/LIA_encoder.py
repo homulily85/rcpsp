@@ -1,7 +1,7 @@
 from z3 import Int, Bool, And, Implies, sat, unsat, If
 
-from encoder.lia.LIA_model import LIAModel
 from encoder.RCPSP_Encoder import RCPSPEncoder
+from encoder.lia.LIA_model import LIAModel
 
 
 class LIAEncoder(RCPSPEncoder):
@@ -97,5 +97,8 @@ class LIAEncoder(RCPSPEncoder):
 
     def get_solution(self) -> list[int]:
         """Get the result of the problem where the result is a list of start times for each activity."""
-        return [self.lia_model.solver.model()[self.start[i]].as_long() for i in
-                range(self.problem.njobs)]
+        if self.solution is None:
+            self.solution = [self.lia_model.solver.model()[self.start[i]].as_long() for i in
+                             range(self.problem.njobs)]
+
+        return self.solution

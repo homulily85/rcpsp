@@ -74,6 +74,7 @@ class SATEncoder(RCPSPEncoder):
 
         if self.solution is not None:
             return self.solution
+
         sol = []
         for i in range(self.problem.njobs):
             start_time_found = False

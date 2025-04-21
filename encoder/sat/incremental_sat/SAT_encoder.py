@@ -62,8 +62,24 @@ class SATEncoder(RCPSPEncoder):
         """This method is used to decrease the makespan of the problem.
         It should be called after encode() and solve() methods.
         After calling this method, you will need to call solve() method to solve problem with new makespan."""
-        self.assumptions.add(-self.start[self.problem.njobs - 1, self.makespan])
-        self.makespan -= 1
+        self.get_solution()
+        last_job = []
+        for i in range(self.problem.njobs):
+            if self.problem.successors[i] == [self.problem.njobs - 1]:
+                last_job.append(i)
+
+        actual_makespan = 0
+        for job in last_job:
+            if self.solution[job] + self.problem.durations[job] > actual_makespan:
+                actual_makespan = self.solution[job] + self.problem.durations[job]
+
+        if self.makespan == actual_makespan:
+            self.assumptions.add(-self.start[self.problem.njobs - 1, self.makespan])
+            self.makespan-=1
+        else:
+            for m in range(actual_makespan + 1, self.makespan + 1):
+                self.assumptions.add(-self.start[self.problem.njobs - 1, m])
+            self.makespan = actual_makespan
         self.solution = None
 
     def get_solution(self) -> list[int]:
@@ -87,4 +103,5 @@ class SATEncoder(RCPSPEncoder):
                 raise Exception(
                     f"Start time for activity {i} not found in the solution with makespan {self.makespan}"
                 )
+        self.solution = sol
         return sol

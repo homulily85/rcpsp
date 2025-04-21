@@ -84,15 +84,25 @@ class LIAEncoder(RCPSPEncoder):
         """This method is used to decrease the makespan of the problem.
         It should be called after encode() and solve() methods.
         After calling this method, you will need to call solve() method to solve problem with new makespan."""
+        self.get_solution()
+        last_job = []
+        for i in range(self.problem.njobs):
+            if self.problem.successors[i] == [self.problem.njobs - 1]:
+                last_job.append(i)
 
-        for consistency_variable in self.run.keys():
-            if self.makespan in consistency_variable:
-                self.assumptions.add(self.run[consistency_variable] == False)
+        actual_makespan = 0
+        for job in last_job:
+            if self.solution[job] + self.problem.durations[job] > actual_makespan:
+                actual_makespan = self.solution[job] + self.problem.durations[job]
 
-        for start_variable in self.start.keys():
-            self.assumptions.add(self.start[start_variable] < self.makespan)
+        if self.makespan == actual_makespan:
+            self.assumptions.add(self.start[self.problem.njobs - 1] != self.makespan)
+            self.makespan -= 1
+        else:
+            for m in range(actual_makespan + 1, self.makespan + 1):
+                self.assumptions.add(self.start[self.problem.njobs - 1] != m)
+            self.makespan = actual_makespan
 
-        self.makespan -= 1
         self.solution = None
 
     def get_solution(self) -> list[int]:

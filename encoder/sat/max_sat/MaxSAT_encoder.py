@@ -1,5 +1,6 @@
 import os
 import secrets
+import shutil
 import string
 import subprocess
 import timeit
@@ -73,8 +74,11 @@ class MaxSATEncoder(RCPSPEncoder):
 
     def solve(self):
         # Check if wcnf folder exists
-        os.rmdir('wcnf')
-        os.rmdir('out')
+        if os.path.exists('wcnf'):
+            shutil.rmtree('wcnf')
+        if os.path.exists('out'):
+            shutil.rmtree('out')
+
         os.makedirs('wcnf')
         os.makedirs('out')
 

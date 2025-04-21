@@ -3,6 +3,7 @@ import csv
 import datetime
 import multiprocessing
 import os
+import subprocess
 import timeit
 from enum import Enum
 from typing import Dict, Any, Optional
@@ -527,4 +528,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        process = subprocess.Popen("killall python", shell=True)
+        process.wait()

@@ -73,16 +73,20 @@ class MaxSATEncoder(RCPSPEncoder):
 
     def solve(self):
         # Check if wcnf folder exists
-        if not os.path.exists('wcnf'):
-            os.makedirs('wcnf')
-
-        if not os.path.exists('out'):
-            os.makedirs('out')
+        os.rmdir('wcnf')
+        os.rmdir('out')
+        os.makedirs('wcnf')
+        os.makedirs('out')
 
         file_name = self._generate_random_filename()
         self.output_file = 'out/' + file_name + '.out'
         # Export the SAT model to wcnf folder
         self.sat_model.export('wcnf/' + file_name)
+        size = os.path.getsize('wcnf/' + file_name)
+
+        if size > 25 * 1024 * 1024:
+            self.time_out += 30
+
         # Solve the problem using the MaxSAT solver
         start = timeit.default_timer()
         if self.time_out is not None:

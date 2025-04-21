@@ -1,6 +1,7 @@
 import argparse
 import csv
 import datetime
+import multiprocessing
 import os
 import timeit
 from enum import Enum
@@ -330,7 +331,6 @@ class BenchmarkRunner:
         # Save results
         self.result_manager.save_result(result_info)
 
-
     def _solve_and_optimize(self, encoder: SATEncoder | LIAEncoder | MaxSATEncoder,
                             result_info: Dict[str, Any],
                             file_name: str):
@@ -454,7 +454,10 @@ class BenchmarkRunner:
                 lb = int(row[1])
                 ub = int(row[2])
 
-                self.process_instance(file_name, lb, ub)
+                p = multiprocessing.Process(target=self.process_instance, args=(file_name, lb, ub))
+                p.start()
+                p.join()
+                p.terminate()
 
         total_time = round(timeit.default_timer() - start, 5)
         self.logger.log(f'Benchmark using {self.encoder_type.name} '
@@ -486,6 +489,7 @@ def benchmark(data_set_name: str,
         show_solution=show_solution
     )
     runner.run()
+
 
 def main():
     parser = argparse.ArgumentParser(description='Benchmarking script for SAT encoders.')
@@ -520,6 +524,7 @@ def main():
               args.show_solution)
     print(
         f'Benchmark for {args.dataset_name} using {encoder_type.name} finished at {datetime.datetime.now()}')
+
 
 if __name__ == '__main__':
     main()

@@ -158,3 +158,8 @@ class StaircaseSATEncoder(SATEncoder):
 
     def _start_time_for_job_0(self):
         self.sat_model.add_clause([self.start[(0, 0)]])
+        # temp = []
+        # for job in range(self.problem.njobs):
+        #     if self.problem.predecessors[job] == [0]:
+        #         temp.append(job)
+        # self.sat_model.add_clause([self.start[job, 0] for job in temp])

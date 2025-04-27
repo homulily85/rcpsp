@@ -95,12 +95,12 @@ class MaxSATEncoder(RCPSPEncoder):
         start = timeit.default_timer()
         if self.time_out is not None:
             command = (
-                f"timeout -s SIGTERM {self.time_out}s ./tt-open-wbo-inc-Glucose4_1_static "
+                f"timeout -s SIGTERM {self.time_out}s ./bin/tt-open-wbo-inc-Glucose4_1_static "
                 f"wcnf/{file_name} > {self.output_file}"
             )
         else:
             command = (
-                f"./tt-open-wbo-inc-Glucose4_1_static wcnf/{file_name} > {self.output_file}"
+                f"./bin/tt-open-wbo-inc-Glucose4_1_static wcnf/{file_name} > {self.output_file}"
             )
 
         process = subprocess.Popen(command, shell=True)

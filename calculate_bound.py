@@ -1,228 +1,59 @@
-import random
-from queue import Queue
-import math
-import sys
-import os
 import csv
+import os
+
 from encoder.problem import Problem
 
-# Constants from the original C++ code
-TOURN_FACTOR = 0.5
-OMEGA1 = 0.4
-OMEGA2 = 0.6
+
+def valid_activities_at_time(I, S, R, t):
+    """Returns list of valid activities from R that can start at time t, based on precedence and resource constraints."""
+    valid = []
+    for i in R:
+        # Check precedence constraints
+        if not all(S[j] + I.durations[j] <= t for j in I.predecessors[i]):
+            continue
+
+        # Check resource constraints
+        resource_usage = [0 for _ in range(I.nresources)]
+        for a in range(len(S)):
+            if S[a] <= t < S[a] + I.durations[a] and a not in R:
+                for r in range(I.nresources):
+                    resource_usage[r] += I.requests[i][r]
+
+        if all(resource_usage[r] + I.requests[i][r] <= I.capacities[r] for r in
+               range(I.nresources)):
+            valid.append(i)
+
+    return valid
 
 
-def calcBoundsPriorityRule(problem):
-    """
-    Tournament heuristic using a priority rule, used for calculating initial lower and upper bounds on the makespan.
-    
-    Args:
-        problem: problem instance to consider
+def PSGS(I):
+    """Implements Parallel Schedule Generation Scheme (PSGS) for RCPSP instance I."""
+    V = list(range(I.njobs))
+    R = set(V) - {0}
+    A = {0}
+    C = set()
+    S = [0] * I.njobs
 
-    Returns:
-        tuple of integers (lower_bound, upper_bound)
-    """
-    horizon = 30000
+    while R:
+        # Compute next event time t
+        t = min(S[i] + I.durations[i] for i in A)
 
-    # Use a queue for breadth-first traversal of the precedence graph
-    q = Queue()
-    # Earliest feasible finish time for each job
-    ef = [0] * problem.njobs
+        # Activities finishing at time t
+        Ct = {i for i in A if S[i] + I.durations[i] == t}
+        A -= Ct
+        C |= Ct
 
-    q.put(0)
-    while not q.empty():
-        job = q.get()
-        duration = problem.durations[job]
-        # Move finish until it is feasible considering resource constraints
-        feasibleFinal = False
-        while not feasibleFinal:
-            feasible = True
-            for k in range(problem.nresources):
-                # In Python version, requests are not time-dependent
-                if problem.requests[job][k] > problem.capacities[k]:
-                    feasible = False
-                    ef[job] += 1
-            if feasible:
-                feasibleFinal = True
-            if ef[job] > horizon:
-                return (0, horizon)
+        # Get valid activities at time t
+        D = valid_activities_at_time(I, S, R, t)
 
-        # Update finish times, and enqueue successors
-        for successor in problem.successors[job]:
-            f = ef[job] + problem.durations[successor]
-            if f > ef[successor]:
-                ef[successor] = f  # Use maximum values, because we are interested in critical paths
-            q.put(successor)  # Enqueue successor
+        while D:
+            i = D.pop()
+            S[i] = t
+            A.add(i)
+            R.remove(i)
+            D = valid_activities_at_time(I, S, R, t)
 
-    # Latest feasible start time for each job
-    ls = [horizon] * problem.njobs
-    q.put(problem.njobs - 1)
-
-    while not q.empty():
-        job = q.get()
-        duration = problem.durations[job]
-        # Move start until it is feasible considering resource constraints
-        feasibleFinal = False
-        while not feasibleFinal:
-            feasible = True
-            for k in range(problem.nresources):
-                # In Python version, requests are not time-dependent
-                if problem.requests[job][k] > problem.capacities[k]:
-                    feasible = False
-                    ls[job] -= 1
-            if feasible:
-                feasibleFinal = True
-            if ls[job] < 0:
-                return (ef[-1], horizon)
-
-        # Update start times, and enqueue predecessors
-        for predecessor in problem.predecessors[job]:
-            s = ls[job] - problem.durations[predecessor]
-            if s < ls[predecessor]:
-                ls[predecessor] = s  # Use minimum values for determining critical paths
-            q.put(predecessor)  # Enqueue predecessor
-
-    # Check if any time window is too small: lf[i]-es[i]<durations[i]
-    for i in range(problem.njobs):
-        if (ls[i] + problem.durations[i]) - (ef[i] - problem.durations[i]) < problem.durations[i]:
-            return (ef[-1], horizon)
-
-    # Calculate extended resource utilization values
-    ru = [0.0] * problem.njobs
-    q.put(problem.njobs - 1)  # Enqueue sink job
-
-    while not q.empty():
-        job = q.get()
-        duration = problem.durations[job]
-        demand = 0
-        availability = 0
-
-        for k in range(problem.nresources):
-            # In Python version, demand is not time-dependent
-            demand += problem.requests[job][k]
-            # Simple calculation for availability
-            availability += problem.capacities[k] * (ls[job] + duration - (ef[job] - duration))
-
-        ru[job] = OMEGA1 * ((len(problem.successors[job]) / problem.nresources) * (
-            demand / availability if availability > 0 else 0))
-
-        for successor in problem.successors[job]:
-            ru[job] += OMEGA2 * ru[successor]
-
-        if math.isnan(ru[job]) or ru[job] < 0.0:
-            ru[job] = 0.0  # Prevent errors from strange values here
-
-        # Enqueue predecessors
-        for predecessor in problem.predecessors[job]:
-            q.put(predecessor)
-
-    # Calculate the CPRU (critical path and resource utilization) priority value for each activity
-    cpru = [0.0] * problem.njobs
-    for job in range(problem.njobs):
-        cp = horizon - ls[job]  # Critical path length
-        cpru[job] = cp * ru[job]
-
-    # Use fixed seed for deterministic bounds
-    random.seed(42)
-
-    # Run a number of passes ('tournaments')
-    available = [problem.capacities.copy() for _ in range(horizon)]
-    schedule = [-1] * problem.njobs  # Finish time for each process
-    schedule[0] = 0  # Schedule the starting dummy activity
-
-    bestMakespan = sys.maxsize // 2
-
-    for _ in range((problem.njobs - 2) * 5):  # Number of passes scales with number of jobs
-        for i in range(1, problem.njobs):
-            schedule[i] = -1
-
-        # Initialize remaining resource availabilities for all time points
-        available = [[problem.capacities[k] for _ in range(horizon)] for k in
-                     range(problem.nresources)]
-
-        # Schedule the starting dummy activity
-        schedule[0] = 0
-
-        # Schedule all remaining jobs
-        for i in range(1, problem.njobs):
-            # Randomly select a fraction of the eligible activities (with replacement)
-            eligible = []
-            for j in range(1, problem.njobs):
-                if schedule[j] >= 0:
-                    continue
-
-                predecessorsScheduled = True
-                for predecessor in problem.predecessors[j]:
-                    if schedule[predecessor] < 0:
-                        predecessorsScheduled = False
-
-                if predecessorsScheduled:
-                    eligible.append(j)
-
-            if not eligible:
-                break
-
-            Z = max(int(TOURN_FACTOR * len(eligible)), 2)
-            selected = []
-
-            for _ in range(Z):
-                choice = int(random.random() * len(eligible))
-                selected.append(eligible[choice])
-
-            # Select the activity with the best priority value
-            winner = -1
-            bestPriority = -sys.float_info.max / 2.0
-
-            for sjob in selected:
-                if cpru[sjob] >= bestPriority:
-                    bestPriority = cpru[sjob]
-                    winner = sjob
-
-            # Schedule it as early as possible
-            finish = -1
-            for predecessor in problem.predecessors[winner]:
-                newFinish = schedule[predecessor] + problem.durations[winner]
-                if newFinish > finish:
-                    finish = newFinish
-
-            duration = problem.durations[winner]
-            feasibleFinal = False
-
-            while not feasibleFinal:
-                feasible = True
-                for k in range(problem.nresources):
-                    for t in range(finish - duration, finish):
-                        if t < 0 or t >= horizon:
-                            continue
-                        # Check if enough resources are available at time t
-                        if problem.requests[winner][k] > available[k][t]:
-                            feasible = False
-                            finish += 1
-                            break
-
-                if feasible:
-                    feasibleFinal = True
-                if finish > horizon:
-                    feasibleFinal = False
-                    break
-
-            if not feasibleFinal:
-                break  # Skip the rest of this pass
-
-            schedule[winner] = finish
-
-            # Update remaining resource availabilities
-            for k in range(problem.nresources):
-                for t in range(finish - duration, finish):
-                    if t < 0 or t >= horizon:
-                        continue
-                    available[k][t] -= problem.requests[winner][k]
-
-        if schedule[-1] >= 0 and schedule[-1] < bestMakespan:
-            bestMakespan = schedule[-1]
-
-    # For the lower bound we use earliest start of end dummy activity
-    return (ef[-1], min(horizon, bestMakespan))
+    return [min(S), max(S)]  # Return lower and upper bounds
 
 
 def find_file(directory):
@@ -266,7 +97,7 @@ def calculate_and_save_bounds(input_folder, output_file):
             problem = Problem(file_path)
 
             # Calculate bounds
-            lower_bound, upper_bound = calcBoundsPriorityRule(problem)
+            lower_bound, upper_bound = PSGS(problem)
 
             # Get just the filename (not the full path)
             filename = os.path.basename(file_path)
@@ -289,4 +120,4 @@ def calculate_and_save_bounds(input_folder, output_file):
 
 
 if __name__ == "__main__":
-    calculate_and_save_bounds("data_set/pack_d", "bound/bound_pack_d.csv")
+    calculate_and_save_bounds("data_set/pack", "bound/bound_pack.csv")

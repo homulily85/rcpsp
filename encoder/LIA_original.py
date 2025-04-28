@@ -47,15 +47,30 @@ class OriginalLIA:
 
         # Solve the problem using the original LIA solver
         start = timeit.default_timer()
+        # if self.time_out is not None:
+        #     command = (
+        #         f"timeout -s SIGTERM {self.time_out}s "
+        #         f"env LD_LIBRARY_PATH=./bin ./bin/mrcpsp2smt {self.input_file} "
+        #         f"--amopb=lia --pb=lia > {self.output_file}"
+        #     )
+        # else:
+        #     command = (
+        #         f"env LD_LIBRARY_PATH=./bin ./bin/mrcpsp2smt {self.input_file} "
+        #         f"--amopb=lia --pb=lia > {self.output_file}"
+        #     )
+
+        #This comand is used to run the LIA solver in VPS only
         if self.time_out is not None:
             command = (
                 f"timeout -s SIGTERM {self.time_out}s "
-                f"env LD_LIBRARY_PATH=./bin ./bin/mrcpsp2smt {self.input_file} "
+                f"env LD_LIBRARY_PATH=./bin "
+                f"qemu-x86_64-static ./bin/mrcpsp2smt {self.input_file} "
                 f"--amopb=lia --pb=lia > {self.output_file}"
             )
         else:
             command = (
-                f"env LD_LIBRARY_PATH=./bin ./bin/mrcpsp2smt {self.input_file} "
+                f"env LD_LIBRARY_PATH=./bin "
+                f"qemu-x86_64-static ./bin/mrcpsp2smt {self.input_file} "
                 f"--amopb=lia --pb=lia > {self.output_file}"
             )
 

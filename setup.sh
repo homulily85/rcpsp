@@ -8,4 +8,5 @@ pip install -r requirements.txt
 chmod +x ./bin/tt-open-wbo-inc-Glucose4_1_static
 chmod +x ./bin/mrcpsp2smt
 chmod +x ./bin/yices-2.6.0/install-yices
-sudo ./bin/yices-2.6.0/install-yices
+cd ./bin/yices-2.6.0
+sudo ./install-yices

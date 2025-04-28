@@ -5,6 +5,7 @@ sudo apt install -y python3.12-dev python3.12-venv
 python3 -m venv ./
 source ./bin/activate
 pip install -r requirements.txt
-chmod +x .bin/tt-open-wbo-inc-Glucose4_1_static
-chmod +x .bin/mrcpsp2smt
+chmod +x ./bin/tt-open-wbo-inc-Glucose4_1_static
+chmod +x ./bin/mrcpsp2smt
+chmod +x ./bin/yices-2.6.0/install-yices
 sudo ./bin/yices-2.6.0/install-yices

@@ -51,7 +51,7 @@ class OriginalLIA:
             command = (
                 f"timeout -s SIGTERM {self.time_out}s "
                 f"env LD_LIBRARY_PATH=./bin ./bin/mrcpsp2smt {self.input_file} "
-                f"--amopb=lia --pb=lia> {self.output_file}"
+                f"--amopb=lia --pb=lia > {self.output_file}"
             )
         else:
             command = (

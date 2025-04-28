@@ -9,7 +9,7 @@ fi
 encoder_type=$1
 
 # List of datasets
-datasets=("j30.sm" "j60.sm" "j90.sm" "j120.sm" "pack" "pack_d")
+datasets=("pack" "pack_d" "j30.sm" "j60.sm" "j90.sm" "j120.sm")
 
 # Loop through datasets and run the benchmark
 for data_set in "${datasets[@]}"; do

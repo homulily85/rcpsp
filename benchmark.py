@@ -260,10 +260,10 @@ class BenchmarkRunner:
     def create_result_info(self, file_name: str,
                            lb: int,
                            ub: int,
-                           encoder: SATEncoder | LIAEncoder | MaxSATEncoder) \
+                           encoder) \
             -> Dict[str, str | int] | None:
         """Create initial result info dictionary based on encoder type."""
-        if self.encoder_type in [EncoderType.STAIRCASE, EncoderType.THESIS_2022]:
+        if self.encoder_type in [EncoderType.STAIRCASE, EncoderType.THESIS_2022,EncoderType.NEW_STAIRCASE]:
             return {
                 'file_name': file_name,
                 'lb': lb,
@@ -580,5 +580,5 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        process = subprocess.Popen("killall python", shell=True)
+        process = subprocess.Popen("killall python tt-open-wbo-inc-Glucose4_1_static mscpsp2smt", shell=True)
         process.wait()

@@ -580,5 +580,5 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        process = subprocess.Popen("killall python tt-open-wbo-inc-Glucose4_1_static mscpsp2smt", shell=True)
+        process = subprocess.Popen("killall python tt-open-wbo-inc-Glucose4_1_static mrcpsp2smt", shell=True)
         process.wait()

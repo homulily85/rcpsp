@@ -1,6 +1,6 @@
 from pysat.pb import *
 
-from encoder.model.sat_model import Model, SATModel, MaxSATModel
+from encoder.model.sat_model import SATModel, IncrementalSATModel, MaxSATModel
 
 
 class WeightedAtMostKModel:
@@ -8,11 +8,11 @@ class WeightedAtMostKModel:
     Class to encode a weighted at most k constraint.
     """
 
-    def __init__(self, model: Model, bound: int):
+    def __init__(self, model: SATModel, bound: int):
         """
         Initialize the WeightedAtMostKModel.
         :param model: Model to be used for encoding.
-        :type model: Model
+        :type model: SATModel
         :param bound: The bound for the weighted at most k constraint.
         :type bound: int
         """
@@ -54,10 +54,10 @@ class WeightedAtMostKModel:
                                                self.__model.number_of_variables)
         self.__model.number_of_pb_clauses += len(cnf)
 
-        if isinstance(self.__model, SATModel):
+        if isinstance(self.__model, IncrementalSATModel):
             for clause in cnf:
                 self.__model.add_clause(clause)
 
         elif isinstance(self.__model, MaxSATModel):
             for clause in cnf:
-                self.__model.add_hard_clause(clause)
+                self.__model.add_clause(clause)

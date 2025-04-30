@@ -16,7 +16,7 @@ class NUMBER_OF_LITERALS(Enum):
     MORE_THAN_TEN = 11
 
 
-class Model:
+class SATModel:
     """
     A class for managing variables, clauses, and literal.
     """
@@ -142,9 +142,9 @@ class Model:
                 self._number_of_literals[NUMBER_OF_LITERALS.MORE_THAN_TEN] += 1
 
 
-class SATModel(Model):
+class IncrementalSATModel(SATModel):
     """
-    A class for managing a SAT model.
+    A class for managing a incremental SAT model.
     """
 
     def __init__(self):
@@ -175,7 +175,7 @@ class SATModel(Model):
         self._update_statistic(clause)
 
 
-class MaxSATModel(Model):
+class MaxSATModel(SATModel):
     """
     A class for managing a MaxSAT model.
     """
@@ -220,7 +220,7 @@ class MaxSATModel(Model):
         self.__number_of_soft_clauses += 1
         self._update_statistic(clause)
 
-    def add_hard_clause(self, clause: list[int]):
+    def add_clause(self, clause: list[int]):
         """
         Add a hard clause to the MaxSAT model.
         :param clause: The clause to be added.

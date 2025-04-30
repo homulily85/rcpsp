@@ -1,8 +1,8 @@
 from encoder.sat.incremental_sat.PB_constraint import PBConstraint
-from encoder.sat.incremental_sat.SAT_encoder import SATEncoder
+from encoder.sat.incremental_sat.SAT_encoder import SATSolver
 
 
-class Thesis2022SATEncoder(SATEncoder):
+class Thesis2022SATEncoder(SATSolver):
     def encode(self):
         self._start_time_for_job_0()
         self._precedence_constraint()
@@ -13,22 +13,22 @@ class Thesis2022SATEncoder(SATEncoder):
 
     def _resource_constraint(self):
         for t in range(self.makespan):
-            for r in range(self.problem.nresources):
+            for r in range(self.problem.number_of_resources):
                 pb_constraint = PBConstraint(self.sat_model, self.problem.capacities[r])
-                for i in range(self.problem.njobs):
+                for i in range(self.problem.number_of_activities):
                     if t in range(self.ES[i], self.LC[i] + 1):
                         pb_constraint.add_term(self.run[(i, t)], self.problem.requests[i][r])
                 pb_constraint.encode()
 
     def _redundant_constraint(self):
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             for c in range(self.EC[i], self.LC[i]):
                 self.sat_model.add_clause(
                     [-self.run[(i, c)], self.run[(i, c + 1)],
                      self.start[(i, c - self.problem.durations[i] + 1)]])
 
     def _consistency_constraint(self):
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
                 for t in range(s, s + self.problem.durations[i]):
                     self.sat_model.add_clause(
@@ -36,14 +36,14 @@ class Thesis2022SATEncoder(SATEncoder):
                     self.sat_model.number_of_consistency_clause += 1
 
     def _start_clause(self):
-        for i in range(1, self.problem.njobs):
+        for i in range(1, self.problem.number_of_activities):
             clause = []
             for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
                 clause.append(self.start[(i, s)])
             self.sat_model.add_clause(clause)
 
     def _precedence_constraint(self):
-        for i in range(1, self.problem.njobs):
+        for i in range(1, self.problem.number_of_activities):
             for j in self.problem.predecessors[i]:
                 for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
                     clause = [-self.start[(i, s)]]

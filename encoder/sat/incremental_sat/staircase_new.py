@@ -3,7 +3,7 @@ from encoder.sat.incremental_sat.staircase import StaircaseSATEncoder
 
 class NewStaircaseSATEncoder(StaircaseSATEncoder):
     def _precedence_constraint(self):
-        for predecessor in range(1, self.problem.njobs):
+        for predecessor in range(1, self.problem.number_of_activities):
             for successor in self.problem.successors[predecessor]:
                 # Successor can only start at one time
                 self.sat_model.add_clause(

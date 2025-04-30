@@ -8,11 +8,11 @@ import timeit
 from enum import Enum
 from typing import Dict, Any, Optional
 
-from encoder.lia.LIA_encoder import LIASolver
+from encoder.lia.LIA_encoder import LIAEncoder
 from encoder.problem import Problem
-from encoder.sat.incremental_sat.SAT_encoder import SATSolver
+from encoder.sat.incremental_sat.SAT_encoder import SATEncoder
 from encoder.sat.incremental_sat.SAT_model import NUMBER_OF_LITERAL
-from encoder.sat.max_sat.MaxSAT_encoder import MaxSATSolver, SOLVER_STATUS
+from encoder.sat.max_sat.MaxSAT_encoder import MaxSATEncoder, SOLVER_STATUS
 
 
 class EncoderType(Enum):
@@ -243,14 +243,14 @@ class BenchmarkRunner:
             from encoder.sat.incremental_sat.thesis_2022 import Thesis2022SATEncoder
             return Thesis2022SATEncoder(problem, upper_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.LIA:
-            from encoder.lia.LIA_encoder import LIASolver
-            return LIASolver(problem, upper_bound, self.timeout, self.verify)
+            from encoder.lia.LIA_encoder import LIAEncoder
+            return LIAEncoder(problem, upper_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.NEW_STAIRCASE:
             from encoder.sat.incremental_sat.staircase_new import NewStaircaseSATEncoder
             return NewStaircaseSATEncoder(problem, upper_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.MAXSAT:
-            from encoder.sat.max_sat.MaxSAT_encoder import MaxSATSolver
-            return MaxSATSolver(problem, upper_bound, lower_bound, self.timeout, self.verify)
+            from encoder.sat.max_sat.MaxSAT_encoder import MaxSATEncoder
+            return MaxSATEncoder(problem, upper_bound, lower_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.ORIGINAL_LIA:
             from encoder.LIA_original import OriginalLIA
             return OriginalLIA(problem.name, self.timeout, self.verify)
@@ -287,7 +287,7 @@ class BenchmarkRunner:
                 'optimized': False,
                 'timeout': False
             }
-        elif self.encoder_type == EncoderType.LIA:  # LIASolver
+        elif self.encoder_type == EncoderType.LIA:  # LIAEncoder
             return {
                 'file_name': file_name,
                 'lb': lb,
@@ -298,7 +298,7 @@ class BenchmarkRunner:
                 'optimized': False,
                 'timeout': False
             }
-        elif self.encoder_type == EncoderType.MAXSAT:  # MaxSATSolver
+        elif self.encoder_type == EncoderType.MAXSAT:  # MaxSATEncoder
             return {
                 'file_name': file_name,
                 'lb': lb,
@@ -355,7 +355,7 @@ class BenchmarkRunner:
         # Save results
         self.result_manager.save_result(result_info)
 
-    def _solve_and_optimize(self, encoder: SATSolver | LIASolver | MaxSATSolver,
+    def _solve_and_optimize(self, encoder: SATEncoder | LIAEncoder | MaxSATEncoder,
                             result_info: Dict[str, Any],
                             file_name: str):
         """Solve the problem and optimize the makespan."""

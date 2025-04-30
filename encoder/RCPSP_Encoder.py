@@ -6,15 +6,15 @@ class PreprocessingFailed(Exception):
     pass
 
 
-class RCPSPSolver:
+class RCPSPEncoder:
     def __init__(self, problem, makespan, timeout=None, enable_verify=False):
         self.problem = problem
         self.makespan = makespan
         # For each activity: earliest start, earliest close, latest start, and latest close time
-        self.ES = [0] * self.problem.number_of_activities
-        self.EC = [0] * self.problem.number_of_activities
-        self.LS = [self.makespan] * self.problem.number_of_activities
-        self.LC = [self.makespan] * self.problem.number_of_activities
+        self.ES = [0] * self.problem.njobs
+        self.EC = [0] * self.problem.njobs
+        self.LS = [self.makespan] * self.problem.njobs
+        self.LC = [self.makespan] * self.problem.njobs
 
         self.assumptions = set()
 
@@ -30,7 +30,7 @@ class RCPSPSolver:
 
     def _calculate_time_windows(self):
         # Calculate ES and EC
-        mark = [False] * self.problem.number_of_activities
+        mark = [False] * self.problem.njobs
         queue = Queue()
         queue.put(0)
 
@@ -50,9 +50,9 @@ class RCPSPSolver:
                     queue.put(successor)
 
         # Calculate LC and LS
-        mark = [False] * self.problem.number_of_activities
+        mark = [False] * self.problem.njobs
         queue = Queue()
-        queue.put(self.problem.number_of_activities - 1)
+        queue.put(self.problem.njobs - 1)
 
         while not queue.empty():
             curr_job = queue.get()
@@ -70,7 +70,7 @@ class RCPSPSolver:
                 if not mark[predecessor]:
                     queue.put(predecessor)
 
-        for j in range(1, self.problem.number_of_activities):
+        for j in range(1, self.problem.njobs):
             for i in self.problem.successors[j]:
                 if self.ES[j] + self.problem.durations[j] > self.ES[i]:
                     self.ES[i] = self.ES[j] + self.problem.durations[j]
@@ -109,7 +109,7 @@ class RCPSPSolver:
         solution = self.get_solution()
 
         # Check precedence constraint
-        for job in range(self.problem.number_of_activities):
+        for job in range(self.problem.njobs):
             for predecessor in self.problem.predecessors[job]:
                 if solution[job] < solution[predecessor] + self.problem.durations[predecessor]:
                     print(
@@ -119,9 +119,9 @@ class RCPSPSolver:
 
         # Checking resource constraint
         for t in range(solution[-1] + 1):
-            for r in range(self.problem.number_of_resources):
+            for r in range(self.problem.nresources):
                 total_consume = 0
-                for j in range(self.problem.number_of_activities):
+                for j in range(self.problem.njobs):
                     if solution[j] <= t <= solution[j] + self.problem.durations[j] - 1:
                         total_consume += self.problem.requests[j][r]
                 if total_consume > self.problem.capacities[r]:

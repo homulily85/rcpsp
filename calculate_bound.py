@@ -13,14 +13,14 @@ def valid_activities_at_time(I, S, R, t):
             continue
 
         # Check resource constraints
-        resource_usage = [0 for _ in range(I.number_of_resources)]
+        resource_usage = [0 for _ in range(I.nresources)]
         for a in range(len(S)):
             if S[a] <= t < S[a] + I.durations[a] and a not in R:
-                for r in range(I.number_of_resources):
+                for r in range(I.nresources):
                     resource_usage[r] += I.requests[i][r]
 
         if all(resource_usage[r] + I.requests[i][r] <= I.capacities[r] for r in
-               range(I.number_of_resources)):
+               range(I.nresources)):
             valid.append(i)
 
     return valid
@@ -28,11 +28,11 @@ def valid_activities_at_time(I, S, R, t):
 
 def PSGS(I):
     """Implements Parallel Schedule Generation Scheme (PSGS) for RCPSP instance I."""
-    V = list(range(I.number_of_activities))
+    V = list(range(I.njobs))
     R = set(V) - {0}
     A = {0}
     C = set()
-    S = [0] * I.number_of_activities
+    S = [0] * I.njobs
 
     while R:
         # Compute next event time t

@@ -1,6 +1,6 @@
 from pysat.pb import *
 
-from encoder.sat.model import Model, SATModel, MaxSATModel
+from encoder.model.sat_model import Model, SATModel, MaxSATModel
 
 
 class WeightedAtMostKModel:
@@ -9,16 +9,33 @@ class WeightedAtMostKModel:
     """
 
     def __init__(self, model: Model, bound: int):
+        """
+        Initialize the WeightedAtMostKModel.
+        :param model: Model to be used for encoding.
+        :type model: Model
+        :param bound: The bound for the weighted at most k constraint.
+        :type bound: int
+        """
         self.__literals = []
         self.__weights = []
         self.__bound = bound
         self.__model = model
 
-    def add_term(self, literals: int, weights: int):
-        self.__literals.append(literals)
-        self.__weights.append(weights)
+    def add_term(self, literal: int, weight: int):
+        """
+        Add a term to the weighted at most k constraint.
+        :param literal: ID of the literal.
+        :type literal: int
+        :param weight: Weight of the literal.
+        :type weight: int
+        """
+        self.__literals.append(literal)
+        self.__weights.append(weight)
 
     def encode(self):
+        """
+        Encode the weighted at most k constraint into the model.
+        """
         cnf = PBEnc.leq(lits=self.__literals, weights=self.__weights, bound=self.__bound,
                         top_id=self.__model.number_of_variables, encoding=EncType.bdd).clauses
 

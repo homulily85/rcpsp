@@ -8,11 +8,10 @@ import timeit
 from enum import Enum
 from typing import Dict, Any, Optional
 
-from encoder.lia.LIA_encoder import LIASolver
-from encoder.problem import Problem
-from encoder.sat.incremental_sat.SAT_encoder import SATSolver
-from encoder.sat.model import NUMBER_OF_LITERALS
-from encoder.sat.max_sat.MaxSAT_encoder import MaxSATSolver, SOLVER_STATUS
+from encoder.model.problem import Problem
+from encoder.incremental_sat.SAT_encoder import SATSolver
+from encoder.model.sat_model import NUMBER_OF_LITERALS
+from encoder.max_sat.MaxSAT_encoder import MaxSATSolver, SOLVER_STATUS
 
 
 class EncoderType(Enum):
@@ -237,22 +236,19 @@ class BenchmarkRunner:
                        lower_bound: int):
         """Factory method to create the appropriate encoder."""
         if self.encoder_type == EncoderType.STAIRCASE:
-            from encoder.sat.incremental_sat.staircase import StaircaseSATEncoder
+            from encoder.incremental_sat.staircase import StaircaseSATEncoder
             return StaircaseSATEncoder(problem, upper_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.THESIS_2022:
-            from encoder.sat.incremental_sat.thesis_2022 import Thesis2022SATEncoder
+            from encoder.incremental_sat.thesis_2022 import Thesis2022SATEncoder
             return Thesis2022SATEncoder(problem, upper_bound, self.timeout, self.verify)
-        elif self.encoder_type == EncoderType.LIA:
-            from encoder.lia.LIA_encoder import LIASolver
-            return LIASolver(problem, upper_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.NEW_STAIRCASE:
-            from encoder.sat.incremental_sat.staircase_new import NewStaircaseSATEncoder
+            from encoder.incremental_sat.staircase_new import NewStaircaseSATEncoder
             return NewStaircaseSATEncoder(problem, upper_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.MAXSAT:
-            from encoder.sat.max_sat.MaxSAT_encoder import MaxSATSolver
+            from encoder.max_sat.MaxSAT_encoder import MaxSATSolver
             return MaxSATSolver(problem, upper_bound, lower_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.ORIGINAL_LIA:
-            from encoder.LIA_original import OriginalLIA
+            from encoder.lia.lia_original import OriginalLIA
             return OriginalLIA(problem.name, self.timeout, self.verify)
         else:
             raise ValueError(f"Unknown encoder type: {self.encoder_type}")
@@ -356,7 +352,7 @@ class BenchmarkRunner:
         # Save results
         self.result_manager.save_result(result_info)
 
-    def _solve_and_optimize(self, encoder: SATSolver | LIASolver | MaxSATSolver,
+    def _solve_and_optimize(self, encoder: SATSolver | MaxSATSolver,
                             result_info: Dict[str, Any],
                             file_name: str):
         """Solve the problem and optimize the makespan."""

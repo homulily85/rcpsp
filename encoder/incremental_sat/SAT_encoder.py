@@ -1,8 +1,8 @@
 from threading import Timer
 
 from encoder.RCPSP_Encoder import RCPSPSolver
-from encoder.problem import Problem
-from encoder.sat.model import SATModel
+from encoder.model.problem import Problem
+from encoder.model.sat_model import SATModel
 
 
 class SATSolver(RCPSPSolver):

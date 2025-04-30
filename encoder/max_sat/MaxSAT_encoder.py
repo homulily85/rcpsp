@@ -7,9 +7,9 @@ import timeit
 from enum import Enum, auto
 
 from encoder.RCPSP_Encoder import RCPSPSolver
-from encoder.problem import Problem
-from encoder.sat.weighted_at_most_k_model import WeightedAtMostKModel
-from encoder.sat.model import MaxSATModel
+from encoder.model.problem import Problem
+from encoder.model.weighted_at_most_k_model import WeightedAtMostKModel
+from encoder.model.sat_model import MaxSATModel
 
 
 class SOLVER_STATUS(Enum):

@@ -1,7 +1,7 @@
 import csv
 import os
 
-from encoder.problem import Problem
+from encoder.model.problem import Problem
 
 
 def valid_activities_at_time(I, S, R, t):

@@ -5,7 +5,7 @@ from pysat.solvers import Glucose4
 
 class NUMBER_OF_LITERALS(Enum):
     """
-    Enum to represent the number of literals in a clause.
+    Enum to represent the number of literal in a clause.
     """
     ZERO = 0
     ONE = 1
@@ -18,7 +18,7 @@ class NUMBER_OF_LITERALS(Enum):
 
 class Model:
     """
-    A class for managing variables, clauses, and literals.
+    A class for managing variables, clauses, and literal.
     """
 
     def __init__(self):
@@ -103,8 +103,8 @@ class Model:
     @property
     def number_of_literals(self) -> dict[NUMBER_OF_LITERALS, int]:
         """
-        Get the number of literals in the SAT solver.
-        :return: A dictionary with the count of literals.
+        Get the number of literal in the SAT solver.
+        :return: A dictionary with the count of literal.
         :rtype: dict[NUMBER_OF_LITERALS, int]
         """
         return self._number_of_literals
@@ -246,6 +246,6 @@ class MaxSATModel(Model):
             for clause in self.__hard_clauses:
                 f.write("h " + " ".join(map(str, clause)) + " 0\n")
 
-            # Write soft clauses with their weights
+            # Write soft clauses with their weight
             for clause, weight in self.__soft_clauses:
                 f.write(f"{weight} " + " ".join(map(str, clause)) + " 0\n")

@@ -1,4 +1,4 @@
-from encoder.sat.incremental_sat.staircase import StaircaseSATEncoder
+from encoder.incremental_sat.staircase import StaircaseSATEncoder
 
 
 class NewStaircaseSATEncoder(StaircaseSATEncoder):

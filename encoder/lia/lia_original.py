@@ -5,7 +5,7 @@ import string
 import subprocess
 import timeit
 
-from encoder.sat.max_sat.MaxSAT_encoder import SOLVER_STATUS
+from encoder.max_sat.MaxSAT_encoder import SOLVER_STATUS
 
 
 class OriginalLIA:
@@ -98,7 +98,7 @@ class OriginalLIA:
                 if line.startswith('v '):
                     # Keep only the last 'v' line
                     last_v_line = line[2:].strip()
-                    break
+
         if not last_v_line:
             raise Exception("No solution found in output file")
 

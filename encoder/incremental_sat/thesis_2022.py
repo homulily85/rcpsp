@@ -1,5 +1,5 @@
-from encoder.sat.incremental_sat.SAT_encoder import SATSolver
-from encoder.sat.weighted_at_most_k_model import WeightedAtMostKModel
+from encoder.incremental_sat.SAT_encoder import SATSolver
+from encoder.model.weighted_at_most_k_model import WeightedAtMostKModel
 
 
 class Thesis2022SATEncoder(SATSolver):

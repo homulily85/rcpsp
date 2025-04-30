@@ -1,5 +1,5 @@
-from encoder.sat.incremental_sat.PB_constraint import PBConstraint
 from encoder.sat.incremental_sat.SAT_encoder import SATSolver
+from encoder.sat.weighted_at_most_k_model import WeightedAtMostKModel
 
 
 class Thesis2022SATEncoder(SATSolver):
@@ -14,7 +14,7 @@ class Thesis2022SATEncoder(SATSolver):
     def _resource_constraint(self):
         for t in range(self.makespan):
             for r in range(self.problem.number_of_resources):
-                pb_constraint = PBConstraint(self.sat_model, self.problem.capacities[r])
+                pb_constraint = WeightedAtMostKModel(self.sat_model, self.problem.capacities[r])
                 for i in range(self.problem.number_of_activities):
                     if t in range(self.ES[i], self.LC[i] + 1):
                         pb_constraint.add_term(self.run[(i, t)], self.problem.requests[i][r])

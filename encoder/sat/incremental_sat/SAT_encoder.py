@@ -2,7 +2,7 @@ from threading import Timer
 
 from encoder.RCPSP_Encoder import RCPSPSolver
 from encoder.problem import Problem
-from encoder.sat.incremental_sat.sat_model import SATModel
+from encoder.sat.model import SATModel
 
 
 class SATSolver(RCPSPSolver):

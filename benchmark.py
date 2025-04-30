@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 from encoder.lia.LIA_encoder import LIASolver
 from encoder.problem import Problem
 from encoder.sat.incremental_sat.SAT_encoder import SATSolver
-from encoder.sat.number_of_literals import NUMBER_OF_LITERALS
+from encoder.sat.model import NUMBER_OF_LITERALS
 from encoder.sat.max_sat.MaxSAT_encoder import MaxSATSolver, SOLVER_STATUS
 
 

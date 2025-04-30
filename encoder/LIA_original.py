@@ -50,12 +50,12 @@ class OriginalLIA:
         if self.time_out is not None:
             command = (
                 f"timeout -s SIGTERM {self.time_out}s "
-                f"env LD_LIBRARY_PATH=./bin ./bin/mrcpsp2smt {self.input_file} "
+                f"env LD_LIBRARY_PATH=./bin:./bin/yices-2.6.0/lib ./bin/mrcpsp2smt {self.input_file} "
                 f"--amopb=lia --pb=lia > {self.output_file}"
             )
         else:
             command = (
-                f"env LD_LIBRARY_PATH=./bin ./bin/mrcpsp2smt {self.input_file} "
+                f"env LD_LIBRARY_PATH=./bin:./bin/yices-2.6.0/lib ./bin/mrcpsp2smt {self.input_file} "
                 f"--amopb=lia --pb=lia > {self.output_file}"
             )
 
@@ -98,7 +98,7 @@ class OriginalLIA:
                 if line.startswith('v '):
                     # Keep only the last 'v' line
                     last_v_line = line[2:].strip()
-
+                    break
         if not last_v_line:
             raise Exception("No solution found in output file")
 

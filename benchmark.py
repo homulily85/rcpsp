@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 from encoder.lia.LIA_encoder import LIASolver
 from encoder.problem import Problem
 from encoder.sat.incremental_sat.SAT_encoder import SATSolver
-from encoder.sat.incremental_sat.sat_model import NUMBER_OF_LITERAL
+from encoder.sat.number_of_literals import NUMBER_OF_LITERALS
 from encoder.sat.max_sat.MaxSAT_encoder import MaxSATSolver, SOLVER_STATUS
 
 
@@ -263,7 +263,8 @@ class BenchmarkRunner:
                            encoder) \
             -> Dict[str, str | int] | None:
         """Create initial result info dictionary based on encoder type."""
-        if self.encoder_type in [EncoderType.STAIRCASE, EncoderType.THESIS_2022,EncoderType.NEW_STAIRCASE]:
+        if self.encoder_type in [EncoderType.STAIRCASE, EncoderType.THESIS_2022,
+                                 EncoderType.NEW_STAIRCASE]:
             return {
                 'file_name': file_name,
                 'lb': lb,
@@ -271,16 +272,16 @@ class BenchmarkRunner:
                 'num_var': encoder.sat_model.number_of_variables,
                 'num_clause': encoder.sat_model.number_of_clauses,
                 'num_consistency_clause': encoder.sat_model.number_of_consistency_clauses,
-                'num_PB_clause': encoder.sat_model.number_of_PB_clauses,
-                'zero_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.ZERO.value],
-                'one_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.ONE.value],
-                'two_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.TWO.value],
-                'three_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.THREE.value],
-                'four_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.FOUR.value],
+                'num_PB_clause': encoder.sat_model.number_of_pb_clauses,
+                'zero_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERALS.ZERO],
+                'one_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERALS.ONE],
+                'two_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERALS.TWO],
+                'three_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERALS.THREE],
+                'four_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERALS.FOUR],
                 'five_to_ten': encoder.sat_model.number_of_literals[
-                    NUMBER_OF_LITERAL.FIVE_TO_TEN.value],
+                    NUMBER_OF_LITERALS.FIVE_TO_TEN],
                 'more_than_ten': encoder.sat_model.number_of_literals[
-                    NUMBER_OF_LITERAL.MORE_THAN_TEN.value],
+                    NUMBER_OF_LITERALS.MORE_THAN_TEN],
                 'feasible': False,
                 'make_span': 0,
                 'total_solving_time': 0,
@@ -305,19 +306,19 @@ class BenchmarkRunner:
                 'ub': ub,
                 'num_var': encoder.sat_model.number_of_variables,
                 'num_clause': encoder.sat_model.number_of_clauses,
-                'num_soft_constraint': encoder.sat_model.number_of_soft_clause,
-                'num_hard_constraint': encoder.sat_model.number_of_hard_clause,
+                'num_soft_constraint': encoder.sat_model.number_of_soft_clauses,
+                'num_hard_constraint': encoder.sat_model.number_of_hard_clauses,
                 'num_consistency_clause': encoder.sat_model.number_of_consistency_clauses,
-                'num_PB_clause': encoder.sat_model.number_of_PB_clauses,
-                'zero_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.ZERO.value],
-                'one_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.ONE.value],
-                'two_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.TWO.value],
-                'three_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.THREE.value],
-                'four_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.FOUR.value],
+                'num_PB_clause': encoder.sat_model.number_of_pb_clauses,
+                'zero_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERALS.ZERO],
+                'one_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERALS.ONE],
+                'two_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERALS.TWO],
+                'three_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERALS.THREE],
+                'four_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERALS.FOUR],
                 'five_to_ten': encoder.sat_model.number_of_literals[
-                    NUMBER_OF_LITERAL.FIVE_TO_TEN.value],
+                    NUMBER_OF_LITERALS.FIVE_TO_TEN],
                 'more_than_ten': encoder.sat_model.number_of_literals[
-                    NUMBER_OF_LITERAL.MORE_THAN_TEN.value],
+                    NUMBER_OF_LITERALS.MORE_THAN_TEN],
                 'feasible': False,
                 'make_span': 0,
                 'total_solving_time': 0,
@@ -544,7 +545,8 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmarking script for SAT encoders.')
     parser.add_argument('dataset_name', type=str, help='The name of the dataset to benchmark.')
     parser.add_argument('encoder_type', type=str,
-                        choices=['thesis', 'staircase', 'lia', 'new_staircase', 'maxsat','original_lia'],
+                        choices=['thesis', 'staircase', 'lia', 'new_staircase', 'maxsat',
+                                 'original_lia'],
                         help='The type of encoder to use: thesis for THESIS_2022, staircase for STAIRCASE, '
                              'lia for LIA, new_staircase for NEW_STAIRCASE, maxsat for MAXSAT, original_lia for ORIGINAL_LIA.')
     parser.add_argument('timeout', type=int, help='Timeout for solving (0 for no timeout).')
@@ -580,5 +582,6 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        process = subprocess.Popen("killall python tt-open-wbo-inc-Glucose4_1_static mrcpsp2smt", shell=True)
+        process = subprocess.Popen("killall python tt-open-wbo-inc-Glucose4_1_static mrcpsp2smt",
+                                   shell=True)
         process.wait()

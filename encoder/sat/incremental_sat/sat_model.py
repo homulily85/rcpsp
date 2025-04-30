@@ -1,19 +1,6 @@
-from enum import Enum
-
 from pysat.solvers import Glucose4
 
-
-class NUMBER_OF_LITERAL(Enum):
-    """
-    Enum to represent the number of literals in a clause.
-    """
-    ZERO = 0
-    ONE = 1
-    TWO = 2
-    THREE = 3
-    FOUR = 4
-    FIVE_TO_TEN = 5
-    MORE_THAN_TEN = 11
+from encoder.sat.number_of_literals import NUMBER_OF_LITERALS
 
 
 class SATModel:
@@ -28,16 +15,16 @@ class SATModel:
         """
         self.__number_of_variables = 0
         self.__number_of_clauses = 0
-        self.__number_of_PB_clauses = 0
+        self.__number_of_pb_clauses = 0
         self.__number_of_consistency_clauses = 0
         self.__solver = Glucose4(use_timer=True, incr=True)
-        self.__number_of_literals = {NUMBER_OF_LITERAL.ZERO.value: 0,
-                                     NUMBER_OF_LITERAL.ONE.value: 0,
-                                     NUMBER_OF_LITERAL.TWO.value: 0,
-                                     NUMBER_OF_LITERAL.THREE.value: 0,
-                                     NUMBER_OF_LITERAL.FOUR.value: 0,
-                                     NUMBER_OF_LITERAL.FIVE_TO_TEN.value: 0,
-                                     NUMBER_OF_LITERAL.MORE_THAN_TEN.value: 0}
+        self.__number_of_literals = {NUMBER_OF_LITERALS.ZERO: 0,
+                                     NUMBER_OF_LITERALS.ONE: 0,
+                                     NUMBER_OF_LITERALS.TWO: 0,
+                                     NUMBER_OF_LITERALS.THREE: 0,
+                                     NUMBER_OF_LITERALS.FOUR: 0,
+                                     NUMBER_OF_LITERALS.FIVE_TO_TEN: 0,
+                                     NUMBER_OF_LITERALS.MORE_THAN_TEN: 0}
 
     @property
     def number_of_variables(self) -> int:
@@ -67,22 +54,22 @@ class SATModel:
         return self.__number_of_clauses
 
     @property
-    def number_of_PB_clauses(self) -> int:
+    def number_of_pb_clauses(self) -> int:
         """
         Get the number of PB clauses in the SAT solver.
         :return: The number of PB clauses.
         :rtype: int
         """
-        return self.__number_of_PB_clauses
+        return self.__number_of_pb_clauses
 
-    @number_of_PB_clauses.setter
-    def number_of_PB_clauses(self, value: int):
+    @number_of_pb_clauses.setter
+    def number_of_pb_clauses(self, value: int):
         """
         Set the number of PB clauses in the SAT solver.
         :param value: The number of PB clauses.
         :type value: int
         """
-        self.__number_of_PB_clauses = value
+        self.__number_of_pb_clauses = value
 
     @property
     def number_of_consistency_clauses(self) -> int:
@@ -103,11 +90,11 @@ class SATModel:
         self.__number_of_consistency_clauses = value
 
     @property
-    def number_of_literals(self) -> dict[int, int]:
+    def number_of_literals(self) -> dict[NUMBER_OF_LITERALS, int]:
         """
         Get the number of literals in the SAT solver.
         :return: A dictionary with the count of literals.
-        :rtype: dict[int, int]
+        :rtype: dict[NUMBER_OF_LITERALS, int]
         """
         return self.__number_of_literals
 
@@ -137,9 +124,19 @@ class SATModel:
         """
         self.__solver.add_clause(clause)
         self.__number_of_clauses += 1
-        if len(clause) > 10:
-            self.__number_of_literals[NUMBER_OF_LITERAL.MORE_THAN_TEN.value] += 1
-        elif len(clause) > 4:
-            self.__number_of_literals[NUMBER_OF_LITERAL.FIVE_TO_TEN.value] += 1
-        else:
-            self.__number_of_literals[len(clause)] += 1
+
+        match len(clause):
+            case 0:
+                self.__number_of_literals[NUMBER_OF_LITERALS.ZERO] += 1
+            case 1:
+                self.__number_of_literals[NUMBER_OF_LITERALS.ONE] += 1
+            case 2:
+                self.__number_of_literals[NUMBER_OF_LITERALS.TWO] += 1
+            case 3:
+                self.__number_of_literals[NUMBER_OF_LITERALS.THREE] += 1
+            case 4:
+                self.__number_of_literals[NUMBER_OF_LITERALS.FOUR] += 1
+            case _ if len(clause) <= 10:
+                self.__number_of_literals[NUMBER_OF_LITERALS.FIVE_TO_TEN] += 1
+            case _:
+                self.__number_of_literals[NUMBER_OF_LITERALS.MORE_THAN_TEN] += 1

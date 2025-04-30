@@ -34,4 +34,4 @@ class PBConstraint:
         for clause in cnf:
             self._model.add_clause(clause)
 
-        self._model.number_of_PB_clauses += len(cnf)
+        self._model.number_of_pb_clauses += len(cnf)

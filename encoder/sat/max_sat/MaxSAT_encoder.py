@@ -9,7 +9,7 @@ from enum import Enum, auto
 from encoder.RCPSP_Encoder import RCPSPSolver
 from encoder.problem import Problem
 from encoder.sat.max_sat.PB_constraint import PBConstraint
-from encoder.sat.max_sat.max_sat_model import MaxSATModel
+from encoder.sat.max_sat.maxsat_model import MaxSATModel
 
 
 class SOLVER_STATUS(Enum):
@@ -54,17 +54,15 @@ class MaxSATSolver(RCPSPSolver):
         for i in range(self.problem.number_of_activities):
             for t in range(self.ES[i],
                            self.LS[i] + 1):  # t in STW(i) (start time window of activity i)
-                self.sat_model.number_of_variable += 1
-                self.start[(i, t)] = self.sat_model.number_of_variable
+                self.start[(i, t)] = self.sat_model.create_new_var()
 
         for i in range(self.problem.number_of_activities):
             for t in range(self.ES[i],
                            self.LC[i] + 1):  # t in RTW(i) (run time window of activity i)
-                self.sat_model.number_of_variable += 1
-                self.run[(i, t)] = self.sat_model.number_of_variable
+                self.run[(i, t)] = self.sat_model.create_new_var()
 
         for i in range(self.lower_bound, self.upper_bound + 1):
-            self.makespan_var[i] = self.sat_model.get_new_var()
+            self.makespan_var[i] = self.sat_model.create_new_var()
 
     @staticmethod
     def _generate_random_filename():
@@ -242,7 +240,7 @@ class MaxSATSolver(RCPSPSolver):
             # If the current tuple is not in the register, create a new variable
             if current_tuple not in self.register:
                 # Create a new variable for the current tuple
-                self.register[current_tuple] = self.sat_model.get_new_var()
+                self.register[current_tuple] = self.sat_model.create_new_var()
 
                 # Create constraint for staircase
 
@@ -293,7 +291,7 @@ class MaxSATSolver(RCPSPSolver):
                 for t in range(s, s + self.problem.durations[i]):
                     self.sat_model.add_hard_clause(
                         [-self.start[(i, s)], self.run[(i, t)]])
-                    self.sat_model.number_of_consistency_clause += 1
+                    self.sat_model.number_of_consistency_clauses += 1
 
     def _start_time_for_job_0(self):
         self.sat_model.add_hard_clause([self.start[(0, 0)]])

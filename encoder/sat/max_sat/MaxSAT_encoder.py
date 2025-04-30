@@ -6,7 +6,7 @@ import subprocess
 import timeit
 from enum import Enum, auto
 
-from encoder.RCPSP_Encoder import RCPSPEncoder
+from encoder.RCPSP_Encoder import RCPSPSolver
 from encoder.problem import Problem
 from encoder.sat.max_sat.PB_constraint import PBConstraint
 from encoder.sat.max_sat.max_sat_model import MaxSATModel
@@ -19,7 +19,7 @@ class SOLVER_STATUS(Enum):
     UNKNOWN = auto()
 
 
-class MaxSATEncoder(RCPSPEncoder):
+class MaxSATSolver(RCPSPSolver):
     def __init__(self, problem: Problem, upper_bound: int, lower_bound: int, timeout: int = None,
                  enable_verify: bool = False):
         """Initialize the encoder with the problem, makespan, timeout, and verification flag."""
@@ -51,13 +51,13 @@ class MaxSATEncoder(RCPSPEncoder):
         self._create_variable()
 
     def _create_variable(self):
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             for t in range(self.ES[i],
                            self.LS[i] + 1):  # t in STW(i) (start time window of activity i)
                 self.sat_model.number_of_variable += 1
                 self.start[(i, t)] = self.sat_model.number_of_variable
 
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             for t in range(self.ES[i],
                            self.LC[i] + 1):  # t in RTW(i) (run time window of activity i)
                 self.sat_model.number_of_variable += 1
@@ -161,7 +161,7 @@ class MaxSATEncoder(RCPSPEncoder):
             raise Exception("No solution found in output file")
 
         # Initialize the result list with default values
-        result = [-1] * self.problem.njobs
+        result = [-1] * self.problem.number_of_activities
 
         # Extract the start times from the solution
         for (job, time), var_id in self.start.items():
@@ -185,15 +185,15 @@ class MaxSATEncoder(RCPSPEncoder):
 
     def _hard_constraint(self):
         for t in range(self.lower_bound, self.upper_bound + 1):
-            if self.ES[self.problem.njobs - 1] <= t <= self.LS[self.problem.njobs - 1]:
+            if self.ES[self.problem.number_of_activities - 1] <= t <= self.LS[self.problem.number_of_activities - 1]:
                 self.sat_model.add_hard_clause(
-                    [self.makespan_var[t], -self.start[self.problem.njobs - 1, t]])
+                    [self.makespan_var[t], -self.start[self.problem.number_of_activities - 1, t]])
 
         for t in range(self.lower_bound, self.upper_bound):
             self.sat_model.add_hard_clause([self.makespan_var[t], -self.makespan_var[t + 1]])
 
     def _precedence_constraint(self):
-        for predecessor in range(1, self.problem.njobs):
+        for predecessor in range(1, self.problem.number_of_activities):
             for successor in self.problem.successors[predecessor]:
                 # Successor can only start at one time
                 self.sat_model.add_hard_clause(
@@ -273,22 +273,22 @@ class MaxSATEncoder(RCPSPEncoder):
 
     def _resource_constraint(self):
         for t in range(self.makespan):
-            for r in range(self.problem.nresources):
+            for r in range(self.problem.number_of_resources):
                 pb_constraint = PBConstraint(self.sat_model, self.problem.capacities[r])
-                for i in range(self.problem.njobs):
+                for i in range(self.problem.number_of_activities):
                     if t in range(self.ES[i], self.LC[i] + 1):
                         pb_constraint.add_term(self.run[(i, t)], self.problem.requests[i][r])
                 pb_constraint.encode()
 
     def _redundant_constraint(self):
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             for c in range(self.EC[i], self.LC[i]):
                 self.sat_model.add_hard_clause(
                     [-self.run[(i, c)], self.run[(i, c + 1)],
                      self.start[(i, c - self.problem.durations[i] + 1)]])
 
     def _consistency_constraint(self):
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
                 for t in range(s, s + self.problem.durations[i]):
                     self.sat_model.add_hard_clause(

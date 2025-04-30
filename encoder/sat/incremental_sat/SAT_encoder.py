@@ -1,11 +1,11 @@
 from threading import Timer
 
-from encoder.RCPSP_Encoder import RCPSPEncoder
+from encoder.RCPSP_Encoder import RCPSPSolver
 from encoder.problem import Problem
-from encoder.sat.incremental_sat.SAT_model import SATModel
+from encoder.sat.incremental_sat.sat_model import SATModel
 
 
-class SATEncoder(RCPSPEncoder):
+class SATSolver(RCPSPSolver):
     def __init__(self, problem: Problem, makespan: int, timeout: int = None,
                  enable_verify: bool = False):
         """Initialize the encoder with the problem, makespan, timeout, and verification flag."""
@@ -24,17 +24,15 @@ class SATEncoder(RCPSPEncoder):
         self._create_variable()
 
     def _create_variable(self):
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             for t in range(self.ES[i],
                            self.LS[i] + 1):  # t in STW(i) (start time window of activity i)
-                self.sat_model.number_of_variable += 1
-                self.start[(i, t)] = self.sat_model.number_of_variable
+                self.start[(i, t)] = self.sat_model.create_new_variable()
 
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             for t in range(self.ES[i],
                            self.LC[i] + 1):  # t in RTW(i) (run time window of activity i)
-                self.sat_model.number_of_variable += 1
-                self.run[(i, t)] = self.sat_model.number_of_variable
+                self.run[(i, t)] = self.sat_model.create_new_variable()
 
     def solve(self):
         assumptions = list(self.assumptions)
@@ -64,8 +62,8 @@ class SATEncoder(RCPSPEncoder):
         After calling this method, you will need to call solve() method to solve problem with new makespan."""
         self.get_solution()
         last_job = []
-        for i in range(self.problem.njobs):
-            if self.problem.successors[i] == [self.problem.njobs - 1]:
+        for i in range(self.problem.number_of_activities):
+            if self.problem.successors[i] == [self.problem.number_of_activities - 1]:
                 last_job.append(i)
 
         actual_makespan = 0
@@ -74,11 +72,11 @@ class SATEncoder(RCPSPEncoder):
                 actual_makespan = self.solution[job] + self.problem.durations[job]
 
         if self.makespan == actual_makespan:
-            self.assumptions.add(-self.start[self.problem.njobs - 1, self.makespan])
+            self.assumptions.add(-self.start[self.problem.number_of_activities - 1, self.makespan])
             self.makespan-=1
         else:
             for m in range(actual_makespan + 1, self.makespan + 1):
-                self.assumptions.add(-self.start[self.problem.njobs - 1, m])
+                self.assumptions.add(-self.start[self.problem.number_of_activities - 1, m])
             self.makespan = actual_makespan
         self.solution = None
 
@@ -92,7 +90,7 @@ class SATEncoder(RCPSPEncoder):
             return self.solution
 
         sol = []
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             start_time_found = False
             for s in range(self.ES[i], self.LS[i] + 1):
                 if self.sat_model.solver.get_model()[self.start[(i, s)] - 1] > 0:

@@ -8,11 +8,11 @@ import timeit
 from enum import Enum
 from typing import Dict, Any, Optional
 
-from encoder.lia.LIA_encoder import LIAEncoder
+from encoder.lia.LIA_encoder import LIASolver
 from encoder.problem import Problem
-from encoder.sat.incremental_sat.SAT_encoder import SATEncoder
-from encoder.sat.incremental_sat.SAT_model import NUMBER_OF_LITERAL
-from encoder.sat.max_sat.MaxSAT_encoder import MaxSATEncoder, SOLVER_STATUS
+from encoder.sat.incremental_sat.SAT_encoder import SATSolver
+from encoder.sat.incremental_sat.sat_model import NUMBER_OF_LITERAL
+from encoder.sat.max_sat.MaxSAT_encoder import MaxSATSolver, SOLVER_STATUS
 
 
 class EncoderType(Enum):
@@ -243,14 +243,14 @@ class BenchmarkRunner:
             from encoder.sat.incremental_sat.thesis_2022 import Thesis2022SATEncoder
             return Thesis2022SATEncoder(problem, upper_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.LIA:
-            from encoder.lia.LIA_encoder import LIAEncoder
-            return LIAEncoder(problem, upper_bound, self.timeout, self.verify)
+            from encoder.lia.LIA_encoder import LIASolver
+            return LIASolver(problem, upper_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.NEW_STAIRCASE:
             from encoder.sat.incremental_sat.staircase_new import NewStaircaseSATEncoder
             return NewStaircaseSATEncoder(problem, upper_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.MAXSAT:
-            from encoder.sat.max_sat.MaxSAT_encoder import MaxSATEncoder
-            return MaxSATEncoder(problem, upper_bound, lower_bound, self.timeout, self.verify)
+            from encoder.sat.max_sat.MaxSAT_encoder import MaxSATSolver
+            return MaxSATSolver(problem, upper_bound, lower_bound, self.timeout, self.verify)
         elif self.encoder_type == EncoderType.ORIGINAL_LIA:
             from encoder.LIA_original import OriginalLIA
             return OriginalLIA(problem.name, self.timeout, self.verify)
@@ -268,18 +268,18 @@ class BenchmarkRunner:
                 'file_name': file_name,
                 'lb': lb,
                 'ub': ub,
-                'num_var': encoder.sat_model.number_of_variable,
-                'num_clause': encoder.sat_model.number_of_clause,
-                'num_consistency_clause': encoder.sat_model.number_of_consistency_clause,
-                'num_PB_clause': encoder.sat_model.number_of_PB_clause,
-                'zero_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.ZERO.value],
-                'one_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.ONE.value],
-                'two_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.TWO.value],
-                'three_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.THREE.value],
-                'four_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.FOUR.value],
-                'five_to_ten': encoder.sat_model.number_of_literal[
+                'num_var': encoder.sat_model.number_of_variables,
+                'num_clause': encoder.sat_model.number_of_clauses,
+                'num_consistency_clause': encoder.sat_model.number_of_consistency_clauses,
+                'num_PB_clause': encoder.sat_model.number_of_PB_clauses,
+                'zero_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.ZERO.value],
+                'one_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.ONE.value],
+                'two_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.TWO.value],
+                'three_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.THREE.value],
+                'four_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.FOUR.value],
+                'five_to_ten': encoder.sat_model.number_of_literals[
                     NUMBER_OF_LITERAL.FIVE_TO_TEN.value],
-                'more_than_ten': encoder.sat_model.number_of_literal[
+                'more_than_ten': encoder.sat_model.number_of_literals[
                     NUMBER_OF_LITERAL.MORE_THAN_TEN.value],
                 'feasible': False,
                 'make_span': 0,
@@ -287,7 +287,7 @@ class BenchmarkRunner:
                 'optimized': False,
                 'timeout': False
             }
-        elif self.encoder_type == EncoderType.LIA:  # LIAEncoder
+        elif self.encoder_type == EncoderType.LIA:  # LIASolver
             return {
                 'file_name': file_name,
                 'lb': lb,
@@ -298,25 +298,25 @@ class BenchmarkRunner:
                 'optimized': False,
                 'timeout': False
             }
-        elif self.encoder_type == EncoderType.MAXSAT:  # MaxSATEncoder
+        elif self.encoder_type == EncoderType.MAXSAT:  # MaxSATSolver
             return {
                 'file_name': file_name,
                 'lb': lb,
                 'ub': ub,
-                'num_var': encoder.sat_model.number_of_variable,
-                'num_clause': encoder.sat_model.number_of_clause,
+                'num_var': encoder.sat_model.number_of_variables,
+                'num_clause': encoder.sat_model.number_of_clauses,
                 'num_soft_constraint': encoder.sat_model.number_of_soft_clause,
                 'num_hard_constraint': encoder.sat_model.number_of_hard_clause,
-                'num_consistency_clause': encoder.sat_model.number_of_consistency_clause,
-                'num_PB_clause': encoder.sat_model.number_of_PB_clause,
-                'zero_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.ZERO.value],
-                'one_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.ONE.value],
-                'two_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.TWO.value],
-                'three_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.THREE.value],
-                'four_lits': encoder.sat_model.number_of_literal[NUMBER_OF_LITERAL.FOUR.value],
-                'five_to_ten': encoder.sat_model.number_of_literal[
+                'num_consistency_clause': encoder.sat_model.number_of_consistency_clauses,
+                'num_PB_clause': encoder.sat_model.number_of_PB_clauses,
+                'zero_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.ZERO.value],
+                'one_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.ONE.value],
+                'two_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.TWO.value],
+                'three_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.THREE.value],
+                'four_lits': encoder.sat_model.number_of_literals[NUMBER_OF_LITERAL.FOUR.value],
+                'five_to_ten': encoder.sat_model.number_of_literals[
                     NUMBER_OF_LITERAL.FIVE_TO_TEN.value],
-                'more_than_ten': encoder.sat_model.number_of_literal[
+                'more_than_ten': encoder.sat_model.number_of_literals[
                     NUMBER_OF_LITERAL.MORE_THAN_TEN.value],
                 'feasible': False,
                 'make_span': 0,
@@ -355,7 +355,7 @@ class BenchmarkRunner:
         # Save results
         self.result_manager.save_result(result_info)
 
-    def _solve_and_optimize(self, encoder: SATEncoder | LIAEncoder | MaxSATEncoder,
+    def _solve_and_optimize(self, encoder: SATSolver | LIASolver | MaxSATSolver,
                             result_info: Dict[str, Any],
                             file_name: str):
         """Solve the problem and optimize the makespan."""

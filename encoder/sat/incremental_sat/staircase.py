@@ -1,8 +1,8 @@
 from encoder.sat.incremental_sat.PB_constraint import PBConstraint
-from encoder.sat.incremental_sat.SAT_encoder import SATEncoder
+from encoder.sat.incremental_sat.SAT_encoder import SATSolver
 
 
-class StaircaseSATEncoder(SATEncoder):
+class StaircaseSATEncoder(SATSolver):
     def __init__(self, problem, makespan: int, timeout: int = None, enable_verify: bool = False):
         super().__init__(problem, makespan, timeout, enable_verify)
         self.register: dict[tuple[int, ...], int] = {}
@@ -15,7 +15,7 @@ class StaircaseSATEncoder(SATEncoder):
         self._redundant_constraint()
 
     def _precedence_constraint(self):
-        for predecessor in range(1, self.problem.njobs):
+        for predecessor in range(1, self.problem.number_of_activities):
             for successor in self.problem.successors[predecessor]:
                 # Successor can only start at one time
                 self.sat_model.add_clause(
@@ -57,7 +57,7 @@ class StaircaseSATEncoder(SATEncoder):
             # If the current tuple is not in the register, create a new variable
             if current_tuple not in self.register:
                 # Create a new variable for the current tuple
-                self.register[current_tuple] = self.sat_model.get_new_var()
+                self.register[current_tuple] = self.sat_model.create_new_variable()
 
                 # Create constraint for staircase
 
@@ -102,7 +102,7 @@ class StaircaseSATEncoder(SATEncoder):
             # If the current tuple is not in the register, create a new variable
             if current_tuple not in self.register:
                 # Create a new variable for the current tuple
-                self.register[current_tuple] = self.sat_model.get_new_var()
+                self.register[current_tuple] = self.sat_model.create_new_variable()
 
                 # Create constraint for staircase
 
@@ -134,32 +134,32 @@ class StaircaseSATEncoder(SATEncoder):
 
     def _resource_constraint(self):
         for t in range(self.makespan):
-            for r in range(self.problem.nresources):
+            for r in range(self.problem.number_of_resources):
                 pb_constraint = PBConstraint(self.sat_model, self.problem.capacities[r])
-                for i in range(self.problem.njobs):
+                for i in range(self.problem.number_of_activities):
                     if t in range(self.ES[i], self.LC[i] + 1):
                         pb_constraint.add_term(self.run[(i, t)], self.problem.requests[i][r])
                 pb_constraint.encode()
 
     def _redundant_constraint(self):
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             for c in range(self.EC[i], self.LC[i]):
                 self.sat_model.add_clause(
                     [-self.run[(i, c)], self.run[(i, c + 1)],
                      self.start[(i, c - self.problem.durations[i] + 1)]])
 
     def _consistency_constraint(self):
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             for s in range(self.ES[i], self.LS[i] + 1):  # s in STW(i)
                 for t in range(s, s + self.problem.durations[i]):
                     self.sat_model.add_clause(
                         [-self.start[(i, s)], self.run[(i, t)]])
-                    self.sat_model.number_of_consistency_clause += 1
+                    self.sat_model.number_of_consistency_clauses += 1
 
     def _start_time_for_job_0(self):
         self.sat_model.add_clause([self.start[(0, 0)]])
         # temp = []
-        # for job in range(self.problem.njobs):
+        # for job in range(self.problem.number_of_activities):
         #     if self.problem.predecessors[job] == [0]:
         #         temp.append(job)
         # self.sat_model.add_clause([self.start[job, 0] for job in temp])

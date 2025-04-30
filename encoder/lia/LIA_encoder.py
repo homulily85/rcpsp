@@ -1,10 +1,10 @@
 from z3 import Int, Bool, And, Implies, sat, unsat, If
 
-from encoder.RCPSP_Encoder import RCPSPEncoder
+from encoder.RCPSP_Encoder import RCPSPSolver
 from encoder.lia.LIA_model import LIAModel
 
 
-class LIAEncoder(RCPSPEncoder):
+class LIASolver(RCPSPSolver):
     def __init__(self, problem, makespan, timeout=None, enable_verify=False):
         super().__init__(problem, makespan, timeout, enable_verify)
         self.lia_model = LIAModel()
@@ -22,10 +22,10 @@ class LIAEncoder(RCPSPEncoder):
         self._create_variable()
 
     def _create_variable(self):
-        self.start = {job: Int(f"start_{job}") for job in range(self.problem.njobs)}
+        self.start = {job: Int(f"start_{job}") for job in range(self.problem.number_of_activities)}
         self.run = {
             (i, t): Bool(f"X_{i}_{t}")
-            for i in range(self.problem.njobs)
+            for i in range(self.problem.number_of_activities)
             for t in range(self.ES[i], self.LC[i] + 1)
         }
 
@@ -34,30 +34,30 @@ class LIAEncoder(RCPSPEncoder):
         self.lia_model.solver.add(self.start[0] == 0)
 
         # Ensure jobs start within valid time windows
-        for i in range(1, self.problem.njobs):
+        for i in range(1, self.problem.number_of_activities):
             self.lia_model.solver.add(self.start[i] >= self.ES[i])
             self.lia_model.solver.add(self.start[i] <= self.LS[i])
 
         # Enforce the precedences
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             for j in self.problem.successors[i]:
                 self.lia_model.solver.add(
                     self.start[j] >= self.start[i] + self.problem.durations[i])
 
         # Consistency Constraints
-        for i in range(self.problem.njobs):
+        for i in range(self.problem.number_of_activities):
             for t in range(self.ES[i], self.LC[i] + 1):
                 self.lia_model.solver.add(Implies(self.run[i, t], And(self.start[i] <= t,
                                                                       t < self.start[i] +
                                                                       self.problem.durations[i])))
 
         # Resource Constraints (Optimized for LIA)
-        for k in range(self.problem.nresources):
+        for k in range(self.problem.number_of_resources):
             for t in range(self.makespan + 1):
                 active_jobs = [
                     If(And(self.start[i] <= t, t < self.start[i] + self.problem.durations[i]),
                        self.problem.requests[i][k], 0)
-                    for i in range(self.problem.njobs)]
+                    for i in range(self.problem.number_of_activities)]
                 self.lia_model.solver.add(
                     sum(active_jobs) <= self.problem.capacities[k])  # LIA encoding
 
@@ -86,8 +86,8 @@ class LIAEncoder(RCPSPEncoder):
         After calling this method, you will need to call solve() method to solve problem with new makespan."""
         self.get_solution()
         last_job = []
-        for i in range(self.problem.njobs):
-            if self.problem.successors[i] == [self.problem.njobs - 1]:
+        for i in range(self.problem.number_of_activities):
+            if self.problem.successors[i] == [self.problem.number_of_activities - 1]:
                 last_job.append(i)
 
         actual_makespan = 0
@@ -96,11 +96,11 @@ class LIAEncoder(RCPSPEncoder):
                 actual_makespan = self.solution[job] + self.problem.durations[job]
 
         if self.makespan == actual_makespan:
-            self.assumptions.add(self.start[self.problem.njobs - 1] != self.makespan)
+            self.assumptions.add(self.start[self.problem.number_of_activities - 1] != self.makespan)
             self.makespan -= 1
         else:
             for m in range(actual_makespan + 1, self.makespan + 1):
-                self.assumptions.add(self.start[self.problem.njobs - 1] != m)
+                self.assumptions.add(self.start[self.problem.number_of_activities - 1] != m)
             self.makespan = actual_makespan
 
         self.solution = None
@@ -109,6 +109,6 @@ class LIAEncoder(RCPSPEncoder):
         """Get the result of the problem where the result is a list of start times for each activity."""
         if self.solution is None:
             self.solution = [self.lia_model.solver.model()[self.start[i]].as_long() for i in
-                             range(self.problem.njobs)]
+                             range(self.problem.number_of_activities)]
 
         return self.solution

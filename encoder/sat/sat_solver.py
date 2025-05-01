@@ -114,8 +114,7 @@ class SATSolver(RCPSPSolver):
     @property
     def solution(self) -> list[int]:
         if self.sat_model.solver.get_model() is None:
-            raise Exception(
-                f"This problem is unsatisfiable.")
+            raise Exception(f"This problem is unsatisfiable.")
 
         if self._solution is not None:
             return self._solution
@@ -136,7 +135,7 @@ class SATSolver(RCPSPSolver):
         return sol
 
     def _resource_constraint(self):
-        for t in range(self._upper_bound):
+        for t in range(self._upper_bound + 1):
             for r in range(self._problem.number_of_resources):
                 pb_constraint = WeightedAtMostKModel(self.sat_model, self._problem.capacities[r])
                 for i in range(self._problem.number_of_activities):

@@ -15,6 +15,7 @@ from encoder.model.status import SOLVER_STATUS
 class EncoderType(Enum):
     THESIS = auto()
     STAIRCASE = auto()
+    OLD_STAIRCASE = auto()
     LIA = auto()
     MAXSAT = auto()
 
@@ -65,7 +66,7 @@ class ResultManager:
         """Create the output file with appropriate headers based on encoder type."""
         with open(self.output_path, "a+") as f:
             match self.encoder_type:
-                case EncoderType.STAIRCASE | EncoderType.THESIS:
+                case EncoderType.STAIRCASE | EncoderType.THESIS| EncoderType.OLD_STAIRCASE:
                     f.write(
                         'file_name,'
                         'lower_bound,'
@@ -122,7 +123,7 @@ class ResultManager:
         """Save benchmark results to the output file."""
         with open(self.output_path, "a+") as f:
             match self.encoder_type:
-                case EncoderType.STAIRCASE | EncoderType.THESIS:
+                case EncoderType.STAIRCASE | EncoderType.THESIS| EncoderType.OLD_STAIRCASE:
                     f.write(
                         f'{result_info["file_name"]},'
                         f'{result_info["lower_bound"]},'
@@ -216,6 +217,10 @@ class BenchmarkRunner:
                 from encoder.sat.incremental_sat.staircase_new import ImprovedStaircaseMethod
                 return ImprovedStaircaseMethod(input_file, lower_bound, upper_bound, self.timeout,
                                                self.verify)
+            case EncoderType.OLD_STAIRCASE:
+                from encoder.sat.incremental_sat.staircase import StaircaseMethod
+                return StaircaseMethod(input_file, lower_bound, upper_bound, self.timeout,
+                                       self.verify)
             case EncoderType.THESIS:
                 from encoder.sat.incremental_sat.thesis_2022 import ThesisMethod
                 return ThesisMethod(input_file, lower_bound, upper_bound, self.timeout,
@@ -237,7 +242,7 @@ class BenchmarkRunner:
             -> Dict[str, str | int] | None:
         """Create initial result info dictionary based on encoder type."""
         match self.encoder_type:
-            case EncoderType.STAIRCASE | EncoderType.THESIS:
+            case EncoderType.STAIRCASE | EncoderType.THESIS| EncoderType.OLD_STAIRCASE:
                 return {
                     'file_name': file_name,
                     'lower_bound': lower_bound,
@@ -520,7 +525,7 @@ def main():
     parser = argparse.ArgumentParser(description='Benchmarking script for SAT encoders.')
     parser.add_argument('dataset_name', type=str, help='The name of the dataset to benchmark.')
     parser.add_argument('encoder_type', type=str,
-                        choices=['thesis', 'staircase', 'lia', 'maxsat'],
+                        choices=['thesis', 'staircase', 'lia', 'maxsat', 'old_staircase'],
                         help='The type of encoder to use.')
     parser.add_argument('timeout', type=int, help='Timeout for solving (0 for no timeout).')
     parser.add_argument('--save_solution', action='store_true',
@@ -534,6 +539,7 @@ def main():
     encoder_type_map = {
         'thesis': EncoderType.THESIS,
         'staircase': EncoderType.STAIRCASE,
+        'old_staircase': EncoderType.OLD_STAIRCASE,
         'lia': EncoderType.LIA,
         'maxsat': EncoderType.MAXSAT,
     }

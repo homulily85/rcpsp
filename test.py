@@ -1,9 +1,10 @@
+from encoder.sat.incremental_sat.Improved_resource_constraint import ImprovedResourceConstraint
 from encoder.sat.incremental_sat.staircase import StaircaseMethod
 from encoder.sat.incremental_sat.staircase_new import ImprovedStaircaseMethod
 from encoder.sat.incremental_sat.thesis_2022 import ThesisMethod
 from encoder.sat.max_sat.maxsat_solver import MaxSATSolver
 
-e = MaxSATSolver('data_set/data_set_test/test_2022.sm', 6, 6, enable_verify=True)
+e = ImprovedResourceConstraint('data_set/data_set_test/test_2020.sm', 3, 8, enable_verify=True)
 e.encode()
 model = e.solve()
 while model:

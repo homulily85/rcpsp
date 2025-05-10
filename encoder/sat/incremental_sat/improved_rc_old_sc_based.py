@@ -1,6 +1,5 @@
 from encoder.model.weighted_at_most_k_model import WeightedAtMostKModel
 from encoder.sat.incremental_sat.staircase import StaircaseMethod
-from encoder.sat.incremental_sat.staircase_new import ImprovedStaircaseMethod
 
 
 class ImprovedResourceConstraintStaircaseBased(StaircaseMethod):

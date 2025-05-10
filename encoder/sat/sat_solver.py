@@ -161,10 +161,10 @@ class SATSolver(RCPSPSolver):
     def _start_time_for_job_0(self):
         self.sat_model.add_clause([self._start[(0, 0)]])
         # temp = []
-        # for job in range(self.problem.number_of_activities):
-        #     if self.problem.predecessors[job] == [0]:
+        # for job in range(self._problem.number_of_activities):
+        #     if self._problem.predecessors[job] == [0]:
         #         temp.append(job)
-        # self.sat_model.add_clause([self.start[job, 0] for job in temp])
+        # self.sat_model.add_clause([self._start[job, 0] for job in temp])
 
     def _precedence_constraint(self):
         raise NotImplementedError()

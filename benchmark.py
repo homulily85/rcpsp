@@ -422,7 +422,8 @@ class BenchmarkRunner:
 
             if sat:
                 # Solution found - verify and update result info
-                encoder.verify()
+                if self.verify:
+                    encoder.verify()
                 result_info['feasible'] = True
                 result_info['makespan'] = encoder.makespan
                 result_info['total_solving_time'] = round(encoder.time_used, 5)
@@ -449,7 +450,8 @@ class BenchmarkRunner:
 
                     elif sat:
                         # Better solution found
-                        encoder.verify()
+                        if self.verify:
+                            encoder.verify()
                         result_info['makespan'] = encoder.makespan
                         result_info['total_solving_time'] = round(encoder.time_used, 5)
                         if self.show_solution:

@@ -170,8 +170,6 @@ class IncrementalSATModel(SATModel):
         :type clause: list[int]
         """
         self._solver.add_clause(clause)
-        self._number_of_clauses += 1
-
         self._update_statistic(clause)
 
 

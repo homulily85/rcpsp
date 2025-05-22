@@ -227,14 +227,14 @@ class MaxSATSolver(SATSolver):
         return self._register[temp]
 
     def __hard_constraint(self):
-        for t in range(self._lower_bound, self._upper_bound + 1):
+        for t in range(self._lower_bound + 1, self._upper_bound + 1):
             if self._ES[self._problem.number_of_activities - 1] <= t <= self._LS[
                 self._problem.number_of_activities - 1]:
                 self.sat_model.add_clause(
                     [self.__makespan_var[t],
                      -self._start[self._problem.number_of_activities - 1, t]])
 
-        for t in range(self._lower_bound, self._upper_bound):
+        for t in range(self._lower_bound + 1, self._upper_bound):
             self.sat_model.add_clause([self.__makespan_var[t], -self.__makespan_var[t + 1]])
 
     def __soft_constraint(self):

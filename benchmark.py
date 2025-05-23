@@ -441,6 +441,7 @@ class BenchmarkRunner:
                     if sat is None:
                         # Timeout during optimization
                         result_info['timeout'] = True
+                        result_info['total_solving_time'] = round(encoder.time_used, 5)
                         self.logger.log(f'{file_name} timeout while checking makespan: '
                                         f'{encoder.makespan}, total running time: {round(encoder.time_used, 5)}s')
 

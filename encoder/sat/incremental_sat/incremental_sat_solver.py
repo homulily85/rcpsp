@@ -17,7 +17,6 @@ class IncrementalSATSolver(SATSolver):
         """Initialize the encoder with the problem, makespan, timeout, and verification flag."""
         self._sat_model = IncrementalSATModel()
         self._makespan = upper_bound
-        self._assumptions = set()
         super().__init__(input_file, lower_bound, upper_bound, timeout, enable_verify)
 
     @property
@@ -26,8 +25,6 @@ class IncrementalSATSolver(SATSolver):
         return self._sat_model
 
     def solve(self):
-        assumptions = list(self._assumptions)
-
         self._sat_model.solver.clear_interrupt()
         timer = None  # Initialize timer
 
@@ -39,8 +36,7 @@ class IncrementalSATSolver(SATSolver):
             timer.start()
 
         try:
-            result = self._sat_model.solver.solve_limited(assumptions=assumptions,
-                                                          expect_interrupt=True)
+            result = self._sat_model.solver.solve_limited(expect_interrupt=True)
             self._time_used = self._sat_model.solver.time_accum()
             return result
         finally:
@@ -54,26 +50,9 @@ class IncrementalSATSolver(SATSolver):
         if self._makespan == self._lower_bound:
             raise Exception("Makespan cannot be decreased below the lower bound.")
 
-        last_job = []
-        for i in range(self._problem.number_of_activities):
-            if self._problem.successors[i] == [self._problem.number_of_activities - 1]:
-                last_job.append(i)
+        self.sat_model.solver.add_clause([-self._start[self._problem.number_of_activities - 1, self._makespan]])
 
-        actual_makespan = 0
-        for job in last_job:
-            if self.solution[job] + self._problem.durations[job] > actual_makespan:
-                actual_makespan = self.solution[job] + self._problem.durations[job]
-
-        if self._makespan == actual_makespan:
-            self._assumptions.add(
-                -self._start[self._problem.number_of_activities - 1, self._makespan])
-            self._makespan -= 1
-        else:
-            for m in range(actual_makespan + 1, self._makespan + 1):
-                self._assumptions.add(-self._start[self._problem.number_of_activities - 1, m])
-            self._makespan = actual_makespan if actual_makespan > self._lower_bound else self._lower_bound
-
-
+        self._makespan -= 1
         self._solution = None
 
     @property

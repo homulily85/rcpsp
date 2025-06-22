@@ -1,179 +1,370 @@
-import datetime
+import logging
 import os
+import os.path
+import secrets
+import string
+import subprocess
 import timeit
+from enum import Enum, auto
 from pathlib import Path
-from threading import Lock
-from typing import Any
+from threading import Timer
 
-import numpy as np
-from pandas import DataFrame
+from pysat.pb import PBEnc, EncType
+from pysat.solvers import Glucose4
+
+
+def generate_random_filename():
+    """Generate a random filename with 5 alphanumeric characters."""
+    characters = string.ascii_letters + string.digits
+    random_str = ''.join(secrets.choice(characters) for _ in range(5))
+    return random_str
 
 
 def get_project_root() -> Path:
+    """Get the root directory of the project."""
     return Path(__file__).parent.parent
 
 
-class SimpleLoggerMetaclass(type):
-    """A metaclass for the SimpleLogger that ensures only one instance exists."""
-
-    __instance = {}
-    __lock: Lock = Lock()
-
-    def __call__(cls, *args, **kwargs):
-        with cls.__lock:
-            if cls not in cls.__instance:
-                cls.__instance[cls] = super().__call__(*args, **kwargs)
-        return cls.__instance[cls]
+class SOLVER_STATUS(Enum):
+    """
+    Enum to represent the status of the solver.
+    """
+    UNSATISFIABLE = auto()
+    OPTIMAL = auto()
+    SATISFIABLE = auto()
+    UNKNOWN = auto()
 
 
-class SimpleLogger(metaclass=SimpleLoggerMetaclass):
-    """A simple logger class that writes messages to a log file and optionally prints them to the console."""
-
-    def __init__(self):
-        """
-        Initialize the Logger.
-        """
-        self.__file_name = None
-        self.__verbose = False
-
-        # Create log directory if it doesn't exist
-        os.makedirs(f'{get_project_root()}/log', exist_ok=True)
-
-    def log(self, message: str):
-        """Write a message to the log file and optionally print to console.
-        :param message: The message to log.
-        :raises ValueError: If the log file name is not set."""
-        if self.__file_name is None:
-            raise ValueError(
-                "Log file name is not set. Please set the file_name property before logging.")
-        timestamp = datetime.datetime.now()
-        with open(self.__file_name, "a+") as f:
-            f.write(f'[{timestamp}] {message}\n')
-        if self.__verbose:
-            print(f'[{timestamp}] {message}', flush=True)
-
-    @property
-    def verbose(self) -> bool:
-        """Get the verbosity status.
-        :return: True if verbose mode is on, False otherwise."""
-        return self.__verbose
-
-    @verbose.setter
-    def verbose(self, value: bool):
-        """Set the verbosity status.
-        :param value: True to enable verbose mode, False to disable it."""
-        self.__verbose = value
-
-    @property
-    def file_name(self) -> str:
-        """Get the name of the log file."""
-        return self.__file_name
-
-    @file_name.setter
-    def file_name(self, value: str):
-        """Set the name of the log file.
-        :param value: The name of the log file.
-        :raises ValueError: If the log file name is already set.
-        """
-        if self.__file_name is not None:
-            raise ValueError("Log file name is already set.")
-        self.__file_name = f'{get_project_root()}/log/{value}'
-
-class ResultManagerMetaclass(type):
-    """A metaclass for the ResultManager that ensures only one instance exists."""
-
-    __instance = {}
-    __lock: Lock = Lock()
-
-    def __call__(cls, *args, **kwargs):
-        with cls.__lock:
-            if cls not in cls.__instance:
-                cls.__instance[cls] = super().__call__(*args, **kwargs)
-        return cls.__instance[cls]
-
-class ResultManager(metaclass=ResultManagerMetaclass):
-    """Manages statistic output and solution files."""
+class SATSolver:
+    """
+    A warper class for the SAT solver.
+    This class is responsible for managing the SAT solver, adding clauses, and solving the SAT problem,
+    managing assumptions, and providing statistics.
+    """
 
     def __init__(self):
         """
-        Initialize the ResultManager.
+        Initialize the SAT solver.
         """
-        self.__file_name = None
-        self.__export_solution = None
+        self.__number_of_variables = 0
+        self.__number_of_clauses = 0
+        self.__solver = Glucose4(use_timer=True, incr=True)
+        self.__assumption = set()
+        self.__last_feasible_model = None
+        self.__number_of_calls = 0
 
-        # Create result directory
-        os.makedirs(f'{get_project_root()}/statistic', exist_ok=True)
-        os.makedirs(f'{get_project_root()}/solution', exist_ok=True)
+    def create_new_variable(self) -> int:
+        """
+        Create a new variable in the SAT solver.
+        :return: The index of the new variable.
+        """
+        self.__number_of_variables += 1
+        return self.__number_of_variables
 
-        self.__statistic = DataFrame(columns=np.array([
-            'file_name',
-            'lower_bound',
-            'upper_bound',
-            'variables',
-            'clauses',
-            'soft_clauses',
-            'hard_constraint_clauses',
-            'consistency_clauses',
-            'pb_clauses',
-            'zero_literals',
-            'one_literals',
-            'two_literals',
-            'three_literals',
-            'four_literals',
-            'five_to_ten_literals',
-            'more_than_ten_literals',
-            'feasible',
-            'makespan',
-            'total_solving_time',
-            'optimized',
-            'timeout'
-        ]))
+    def add_clause(self, clause: list[int]):
+        """
+        Add a clause to the SAT solver.
+        :param clause: The clause to be added.
+        """
+        self.__number_of_clauses += 1
+        self.__solver.add_clause(clause)
 
-        self.__solution: dict[str, Any] = {}
+    def solve(self, time_limit=None) -> bool | None:
+        """
+        Solve the SAT problem using the current clauses.
+        :return: The status of the solver after attempting to solve the problem.
+        """
+        if time_limit is not None and time_limit <= 0:
+            return None
+        logging.info(f"Solving the SAT call {self.__number_of_calls}...")
+        self.__number_of_calls += 1
+        start = timeit.default_timer()
+        self.__solver.clear_interrupt()
+        timer = None
+        if time_limit is not None:
+            def interrupt(s):
+                s.interrupt()
+                logging.info("Solver interrupted due to timeout.")
 
-    @property
-    def file_name(self) -> str:
-        """Get the file name for statistics and solution."""
-        return self.__file_name
+            timer = Timer(time_limit, interrupt, [self.__solver])
+            timer.start()
 
-    @file_name.setter
-    def file_name(self, value: str):
-        """Set the file name for statistics and solution.
-        :param value: The output path.
-        :raises ValueError: If the output path is already set."""
-        if self.__file_name is not None:
-            raise ValueError("Output path is already set.")
-        self.__file_name = f'{get_project_root()}/statistic/{value}'
+        try:
+            result = self.__solver.solve_limited(expect_interrupt=True,
+                                                 assumptions=self.__assumption)
+            if result is not None and result:
+                self.__last_feasible_model = self.__solver.get_model()
+            return result
+        finally:
+            if timer:
+                timer.cancel()
+            logging.info("Finished solving.")
+            logging.info(
+                f"Solving time for this call: {round(timeit.default_timer() - start, 5)} seconds.")
+            logging.info(
+                f"Total solving time: {round(self.__solver.time_accum(), 5)} seconds.")
 
-    @property
-    def export_solution(self) -> bool:
-        """Get whether to show the solution."""
-        return self.__export_solution
+    def get_last_feasible_model(self) -> list[int] | None:
+        """
+        Get the last feasible model from the SAT solver.
+        :return: The last feasible model as a list of integers or None if no model is available.
+        """
+        return self.__last_feasible_model
 
-    @export_solution.setter
-    def export_solution(self, value: bool):
-        """Set whether to export the solution.
-        :param value: True to show the solutions, False otherwise."""
-        self.__export_solution = value
+    def get_model(self) -> list[int] | None:
+        """
+        Get the model from the SAT solver if it is satisfiable.
+        :return: The model as a list of integers or None if the problem is unsatisfiable.
+        """
+        return self.__solver.get_model()
 
-    def export(self):
-        """Export the statistics to a CSV file and solution to a .sol file."""
-        if self.__file_name is None:
-            raise ValueError("Output path is not set.")
-        self.__statistic.to_csv(self.__file_name, index=False)
+    def add_assumption(self, assumption: int):
+        """
+        Add an assumption to the SAT solver.
+        :param assumption: The assumption to be added.
+        """
+        self.__assumption.add(assumption)
 
-        if self.__export_solution:
-            solution_file = self.__file_name.replace('.csv', '.sol')
-            with open(solution_file, 'w') as f:
-                for key, value in self.__solution.items():
-                    f.write(f'{key}: {value}\n')
+    def add_at_most_k(self, literals: list[int], weights: list[int], k: int):
+        """
+        Add a weighted at most k constraint to the SAT solver.
+        :param literals: List of literals involved in the constraint.
+        :param weights: List of weights corresponding to each literal.
+        :param k: The bound for the weighted at most k constraint.
+        """
+        cnf = PBEnc.leq(lits=literals, weights=weights, bound=k,
+                        top_id=self.__number_of_variables, encoding=EncType.bdd).clauses
 
-    @property
-    def statistic(self) -> DataFrame:
-        """Get the DataFrame containing statistics."""
-        return self.__statistic
+        if not cnf:
+            return
 
-    @property
-    def solution(self) -> dict[str, Any]:
-        """Get the dictionary containing the solution."""
-        return self.__solution
+        new_variable_max_index = -1
+        for clause in cnf:
+            for var in clause:
+                if abs(var) > new_variable_max_index:
+                    new_variable_max_index = abs(var)
+        if new_variable_max_index == -1:
+            return
+
+        self.__number_of_variables = max(new_variable_max_index, self.__number_of_variables)
+        for clause in cnf:
+            self.add_clause(clause)
+
+    def clear_interrupt(self):
+        self.__solver.clear_interrupt()
+
+    def get_statistics(self) -> dict[str, int | float]:
+        """
+        Get the statistics of the SAT solver.
+        :return: A dictionary containing the statistics of the SAT solver."""
+        return {
+            "variables": self.__number_of_variables,
+            "clauses": self.__number_of_clauses,
+            "hard_clauses": self.__number_of_clauses,
+            "soft_clauses": 0,
+            "total_solving_time": round(self.__solver.time_accum(), 5),
+            "number_of_calls": self.__number_of_calls
+        }
+
+
+class MaxSATSolver:
+    """
+    A warper class for the MaxSAT solver.
+    This class is responsible for managing the MaxSAT solver, adding hard and soft clauses,
+    solving the MaxSAT problem, and providing statistics.
+    """
+
+    def __init__(self):
+        """
+        Initialize the MaxSAT solver.
+        """
+        self.__output_file = None
+        self.__return_code = None
+        self.__time_used = 0
+        self.__number_of_variables = 0
+        self.__number_of_clauses = 0
+        self.__number_of_soft_clauses = 0
+        self.__number_of_hard_clauses = 0
+        self.__soft_clauses: list[tuple[list[int], int]] = []
+        self.__hard_clauses = []
+        self.__model = None
+
+    def create_new_variable(self) -> int:
+        """
+        Create a new variable in the SAT solver.
+        :return: The index of the new variable.
+        """
+        self.__number_of_variables += 1
+        return self.__number_of_variables
+
+    def add_hard_clause(self, clause: list[int]):
+        """
+        Add a clause to the SAT solver.
+        :param clause: The clause to be added.
+        """
+        self.__number_of_clauses += 1
+        self.__number_of_hard_clauses += 1
+        self.__hard_clauses.append(clause)
+
+    def add_soft_clause(self, clause: list[int], weight: int):
+        """
+        Add a soft clause to the MaxSAT solver.
+        :param clause: The clause to be added.
+        :param weight: The weight of the soft clause.
+        :raises ValueError: If the weight of the soft clause is less than or equal to 0.
+        """
+        if weight <= 0:
+            raise ValueError("Weight of a soft clause must be greater than 0.")
+        self.__number_of_clauses += 1
+        self.__number_of_soft_clauses += 1
+        self.__soft_clauses.append((clause, weight))
+        self.__number_of_soft_clauses += 1
+
+    def solve(self, time_limit=None) -> SOLVER_STATUS:
+        """
+        Solve the SAT problem using the current clauses.
+        :return: The status of the solver after attempting to solve the problem.
+        """
+        project_root = str(get_project_root())
+        os.makedirs(project_root + '/wcnf', exist_ok=True)
+        os.makedirs(project_root + '/out', exist_ok=True)
+
+        file_name = generate_random_filename() + ".wcnf"
+        self.__output_file = project_root + '/out/' + file_name + '.out'
+        # Export the SAT model to wcnf folder
+        self.export(project_root + '/wcnf/' + file_name)
+
+        # Solve the problem using the MaxSAT solver
+        logging.info("Solving the MaxSAT problem...")
+        start = timeit.default_timer()
+        if time_limit is not None:
+            command = (
+                f"timeout -s SIGTERM {time_limit}s {get_project_root()}/bin/tt-open-wbo-inc-Glucose4_1_static "
+                f"wcnf/{file_name} > {self.__output_file}"
+            )
+        else:
+            command = (
+                f"{get_project_root()}/bin/tt-open-wbo-inc-Glucose4_1_static wcnf/{file_name} > {self.__output_file}"
+            )
+
+        process = subprocess.Popen(command, shell=True)
+        process.wait()
+
+        self.__time_used = timeit.default_timer() - start
+
+        logging.info(f"Finished solving the problem.")
+        logging.info(f"Total solving time: {round(self.__time_used, 5)} seconds.")
+
+        logging.info(f"Getting the result from the output file: {self.__output_file}")
+        start = timeit.default_timer()
+        last_s_line = ""
+
+        with open(self.__output_file, 'r') as f:
+            for line in f:
+                if line.startswith('s '):
+                    # Keep only the last 's' line
+                    last_s_line = line[2:].strip()
+
+        logging.info(
+            f"Finished getting the result from the output file: {self.__output_file}")
+        logging.info(
+            f"Time taken to read the output file for solver's status: {round(timeit.default_timer() - start, 5)} seconds.")
+
+        if last_s_line == "UNSATISFIABLE":
+            self.__return_code = SOLVER_STATUS.UNSATISFIABLE
+        elif last_s_line == "SATISFIABLE":
+            self.__return_code = SOLVER_STATUS.SATISFIABLE
+        elif last_s_line == "UNKNOWN":
+            self.__return_code = SOLVER_STATUS.UNKNOWN
+        else:
+            self.__return_code = SOLVER_STATUS.OPTIMAL
+
+        self.get_model()
+
+        return self.__return_code
+
+    def get_model(self) -> list[int] | None:
+        """
+        Get the model from the MaxSAT solver if it is satisfiable.
+        :return: The model as a list of integers or None if the problem is unsatisfiable.
+        """
+        if (self.__return_code == SOLVER_STATUS.UNSATISFIABLE or
+                self.__return_code == SOLVER_STATUS.UNKNOWN):
+            return None
+
+        if self.__model is not None:
+            return self.__model
+
+        logging.info('Getting the model from the output file: ' + self.__output_file)
+        start = timeit.default_timer()
+        last_v_line = ""
+        with open(self.__output_file, 'r') as f:
+            for line in f:
+                if line.startswith('v '):
+                    # Keep only the last 'v' line
+                    last_v_line = line[2:].strip()
+
+        # Use the last "v" line as the solution
+        cleaned = last_v_line.replace('v', '').strip()
+
+        self.__model = [int(d) for d in cleaned]
+        logging.info(f"Finished getting the model from the output file: {self.__output_file}")
+        logging.info(
+            f"Time taken to read the output file for model: {round(timeit.default_timer() - start, 5)} seconds.")
+        return self.__model
+
+    def add_at_most_k(self, literals: list[int], weights: list[int], k: int):
+        """
+        Add a weighted at most k constraint to the SAT solver.
+        :param literals: List of literals involved in the constraint.
+        :param weights: List of weights corresponding to each literal.
+        :param k: The bound for the weighted at most k constraint.
+        """
+        cnf = PBEnc.leq(lits=literals, weights=weights, bound=k,
+                        top_id=self.__number_of_variables, encoding=EncType.bdd).clauses
+
+        if not cnf:
+            return
+
+        new_variable_max_index = -1
+        for clause in cnf:
+            for var in clause:
+                if abs(var) > new_variable_max_index:
+                    new_variable_max_index = abs(var)
+        if new_variable_max_index == -1:
+            return
+
+        self.__number_of_variables = max(new_variable_max_index, self.__number_of_variables)
+        for clause in cnf:
+            self.add_hard_clause(clause)
+
+    def export(self, filename: str):
+        """
+        Export the clauses to a WCNF file.
+        :param filename: The name of the file to export to.
+        """
+        logging.info(f"Exporting the MaxSAT model to {filename}...")
+        start = timeit.default_timer()
+        with open(filename, 'a+') as f:
+            # Write hard clauses first
+            for clause in self.__hard_clauses:
+                f.write("h " + " ".join(map(str, clause)) + " 0\n")
+
+            # Write soft clauses with their weight
+            for clause, weight in self.__soft_clauses:
+                f.write(f"{weight} " + " ".join(map(str, clause)) + " 0\n")
+        logging.info(f"Finished exporting the MaxSAT model to {filename}.")
+        logging.info(
+            f"Time taken to export: {round(timeit.default_timer() - start, 5)} seconds.")
+
+    def get_statistics(self) -> dict[str, int | float]:
+        """
+        Get the statistics of the SAT solver.
+        :return: A dictionary containing the statistics of the SAT solver."""
+        return {
+            "variables": self.__number_of_variables,
+            "clauses": self.__number_of_clauses,
+            "hard_clauses": self.__number_of_hard_clauses,
+            "soft_clauses": self.__number_of_soft_clauses,
+            "total_solving_time": round(self.__time_used, 5)
+        }

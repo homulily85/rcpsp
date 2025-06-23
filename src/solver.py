@@ -211,8 +211,12 @@ class Problem:
         # This is not true, so we need to remove it.
         for i in range(self.__number_of_activities):
             if len(predecessors[i]) > 0 and predecessors[i] != [0]:
-                predecessors[i].remove(0)
-                successors[0].remove(i)
+                try:
+                    predecessors[i].remove(0)
+                    successors[0].remove(i)
+                except ValueError:
+                    pass
+
 
         # Create the precedence graph
         for i in range(self.__number_of_activities):
@@ -255,6 +259,7 @@ class RCPSPSolver:
         self.__schedule = None
         self.__solver: SATSolver | MaxSATSolver | None = None
         self.__status = None
+        self.__encoding_time = 0
 
         if self.__method == 'sat':
             self.__solver = SATSolver()
@@ -563,6 +568,7 @@ class RCPSPSolver:
         if self.__failed_preprocessing:
             return
 
+        start = timeit.default_timer()
         if self.__method == 'sat':
             self.__start_time_for_first_activity(self.__solver.add_clause)
             self.__precedence_constraint(self.__solver.add_clause)
@@ -575,6 +581,8 @@ class RCPSPSolver:
             self.__resource_constraints()
             self.__consistency_constraint(self.__solver.add_hard_clause)
             self.__backpropagate_constraint(self.__solver.add_hard_clause)
+
+        self.__encoding_time = round(timeit.default_timer() - start, 5)
 
     def solve(self, time_limit=None, find_optimal: bool = False) -> SOLVER_STATUS:
         if self.__failed_preprocessing:
@@ -591,6 +599,7 @@ class RCPSPSolver:
                 return self.__status
 
         if self.__method == 'maxsat':
+            start = timeit.default_timer()
             self.__makespan_var = {}
             for i in range(self.__lower_bound, self.__upper_bound + 1):
                 self.__makespan_var[i] = self.__solver.create_new_variable()
@@ -607,6 +616,8 @@ class RCPSPSolver:
 
             for t in range(self.__lower_bound, self.__upper_bound + 1):
                 self.__solver.add_soft_clause([-self.__makespan_var[t]], 1)
+
+            self.__encoding_time += round(timeit.default_timer() - start, 5)
 
             self.__status = self.__solver.solve(time_limit)
             return self.__status
@@ -882,6 +893,7 @@ class RCPSPSolver:
             'soft_clauses': t['soft_clauses'],
             'status': self.__status.name,
             'makespan': self.__schedule[-1] if self.__schedule is not None else None,
+            'encoding_time': self.__encoding_time,
             'total_solving_time': t['total_solving_time'],
         }
 

@@ -36,7 +36,7 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None):
 
     stat = pd.DataFrame(columns=['name', 'lower_bound', 'upper_bound', 'variables', 'clauses',
                                  'hard_clauses', 'soft_clauses', 'status', 'makespan',
-                                 'total_solving_time'])
+                                 'encoding_time','total_solving_time'])
 
     for row in bound.itertuples():
         file_path = f'./data_set/{data_set_name}/{row.name}'
@@ -69,10 +69,13 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None):
         index=False)
 
     report = pd.DataFrame([{
-        'UNSATISFIABLE': stat['status'].str.contains('UNSATISFIABLE').count(),
-        'SATISFIABLE': stat['status'].str.contains('SATISFIABLE').count(),
-        'OPTIMAL': stat['status'].str.contains('OPTIMAL').count(),
-        'UNKNOWN': stat['status'].str.contains('UNKNOWN').count(),
+        'UNSATISFIABLE': stat['status'].str.contains('UNSATISFIABLE').sum(),
+        'SATISFIABLE': stat['status'].str.contains('SATISFIABLE').sum(),
+        'OPTIMAL': stat['status'].str.contains('OPTIMAL').sum(),
+        'UNKNOWN': stat['status'].str.contains('UNKNOWN').sum(),
+        'average_encoding_time': stat['encoding_time'].mean(),
+        "max_encoding_time": stat['encoding_time'].max(),
+        "min_encoding_time": stat['encoding_time'].min(),
         "average_solving_time": stat['total_solving_time'].mean(),
         "max_solving_time": stat['total_solving_time'].max(),
         "min_solving_time": stat['total_solving_time'].min()

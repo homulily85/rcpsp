@@ -572,10 +572,10 @@ class RCPSPSolver:
         if self.__method == 'sat':
             self.__start_time_for_first_activity(self.__solver.add_clause)
             self.__precedence_constraint(self.__solver.add_clause)
-            self.__resource_constraints()
+            # self.__resource_constraints()
+            self.__resource_constraints_with_pbamo()
             self.__consistency_constraint(self.__solver.add_clause)
             self.__backpropagate_constraint(self.__solver.add_clause)
-            self.__pbamo()
         elif self.__method == 'maxsat':
             self.__start_time_for_first_activity(self.__solver.add_hard_clause)
             self.__precedence_constraint(self.__solver.add_hard_clause)
@@ -744,6 +744,51 @@ class RCPSPSolver:
 
                 self.__solver.add_at_most_k(literals=literals, weights=weights,
                                             k=self.__problem.capacities[r])
+
+    def __resource_constraints_with_pbamo(self):
+        pb_clauses = []
+        for t in range(self.__upper_bound):
+            # pb_clauses = []
+            for r in range(self.__problem.number_of_resources):
+                literals = []
+                weights = []
+                for i in range(1, self.__problem.number_of_activities):
+                    if t in range(self.__ES[i], self.__LC[i]):
+                        literals.append(self.__run[i, t])
+                        weights.append(self.__problem.requests[i][r])
+
+                pb_clauses.append((literals, weights, self.__problem.capacities[r]))
+
+            g = nx.DiGraph()
+            index_to_label = {}
+            label_to_index = {}
+            nodes = []
+            count = 0
+            for i in range(self.__problem.number_of_activities):
+                if self.__ES[i] <= t < self.__LC[i]:
+                    index_to_label[count] = i
+                    label_to_index[i] = count
+                    nodes.append(count)
+                    count += 1
+            g.add_nodes_from(nodes)
+
+            edges = []
+            for e in self.__extended_precedence_graph.edges:
+                if e[0] in label_to_index and e[1] in label_to_index:
+                    edges.append([label_to_index[e[0]], label_to_index[e[1]]])
+            g.add_edges_from(edges)
+
+            path_cover = minimum_path_cover(g)
+
+            og_path_cover = []
+
+            for path in path_cover:
+                og_path_cover.append([index_to_label[i] for i in path])
+
+            for p in og_path_cover:
+                pb_clauses.append(([self.__run[i, t] for i in p], [1 for _ in p], 1))
+
+        self.__solver.add_pb_clauses(pb_clauses)
 
     def __pbamo(self):
         for t in range(self.__upper_bound):

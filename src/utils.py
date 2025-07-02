@@ -1,6 +1,7 @@
 import logging
 import os
 import os.path
+import re
 import secrets
 import string
 import subprocess
@@ -23,6 +24,37 @@ def generate_random_filename():
 def get_project_root() -> Path:
     """Get the root directory of the project."""
     return Path(__file__).parent.parent
+
+
+def create_eprime_file(pbs: list[tuple[list[int], list[int], int]]) -> tuple[str, set[int]]:
+    """
+    Create an EPrime file from a list of pseudo-Boolean constraints.
+    :param pbs: A list of pseudo-Boolean constraints, where each constraint is a tuple of (literals, weights, bound).
+                Example: [([1, 2], [3, 4], 5), ([3, 4], [1, 2], 6)]
+    :return: A tuple containing the file path of the created EPrime file and a set of unique literals used in the constraints.
+    """
+    os.makedirs(os.path.join(get_project_root(), 'eprime'), exist_ok=True)
+    file_path = os.path.join(get_project_root(), 'eprime', f'{generate_random_filename()}.eprime')
+
+    clauses = []
+    unique_literals = set()
+
+    for pb in pbs:
+        if len(pb[0]) == 1 and pb[1][0] == 1 and pb[2] == 1:
+            continue
+        unique_literals.update(pb[0])
+        clause = '+'.join(f"{w}*x{l}" for l, w in zip(pb[0], pb[1]))
+        clause += f"<={pb[2]}"
+        clauses.append(clause)
+
+    with open(file_path, 'a+') as f:
+        f.write("language ESSENCE' 1.0\n")
+        for literal in unique_literals:
+            f.write(f"find\t x{literal}:bool\n")
+        f.write("such that\n")
+        f.write("/\\\n".join(clauses))
+
+    return file_path, unique_literals
 
 
 class SOLVER_STATUS(Enum):
@@ -165,6 +197,80 @@ class SATSolver:
             "total_solving_time": round(self.__solver.time_accum(), 5),
             "number_of_calls": self.__number_of_calls
         }
+
+    def __parse_eprime_file(self, file_path: str, input_literals: set[int] | list[int]):
+        literals_mapping = {}
+        auxiliary_mapping = {}
+        literal_found = set()
+
+        with open(file_path, "r") as f:
+            while True:
+                pos = f.tell()
+                line1 = f.readline()
+
+                if line1.startswith('p'):
+                    continue
+
+                if not line1:
+                    break  # EOF
+
+                # Check if the line is an "Encoding variable" comment
+                if line1.startswith("c Encoding variable:"):
+                    var_line = line1
+                    sat_line = f.readline()
+                    var_match = re.search(r'x\d+', var_line)
+                    sat_match = re.search(r'\d+', sat_line)
+                    if var_match and sat_match:
+                        literals_mapping[int(sat_match.group())] = int(var_match.group()[1:])
+                        literal_found.add(int(var_match.group()[1:]))
+                else:
+                    f.seek(pos)  # rewind to previous line if it doesn't match
+                    break  # stop reading mapping section
+
+            for line in f:
+                if line.startswith('c'):
+                    continue
+
+                raw = list(map(int, line.split(' ')))
+
+                clause = []
+
+                for var in raw:
+                    if var == 0:
+                        continue
+
+                    if abs(var) in literals_mapping:
+                        clause.append(
+                            literals_mapping[var] if var > 0 else literals_mapping[abs(var)] * -1)
+
+                    else:
+                        if abs(var) not in auxiliary_mapping:
+                            auxiliary_mapping[abs(var)] = self.create_new_variable()
+
+                        clause.append(
+                            auxiliary_mapping[var] if var > 0 else auxiliary_mapping[abs(var)] * -1
+                        )
+
+                self.add_clause(clause)
+
+        for literal in input_literals:
+            if literal not in literal_found:
+                self.add_clause([-literal])
+
+    def add_pb_clauses(self, pbs: list[tuple[list[int], list[int], int]]):
+        eprime_path, input_literals = create_eprime_file(pbs)
+
+        os.makedirs(os.path.join(get_project_root(), 'dimacs'), exist_ok=True)
+        output_file_path = os.path.join(get_project_root(), 'dimacs',
+                                        f"{generate_random_filename()}.dimacs")
+
+        command = (f"{get_project_root()}/bin/savilerow/savilerow {eprime_path} "
+                   f"-sat -sat-pb-mdd -amo-detect -out-sat {output_file_path} ")
+
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL)
+        process.wait()
+
+        self.__parse_eprime_file(output_file_path, input_literals)
 
 
 class MaxSATSolver:

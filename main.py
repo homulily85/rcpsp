@@ -143,3 +143,7 @@ if __name__ == "__main__":
             shutil.rmtree('./out')
         if os.path.exists('./wcnf'):
             shutil.rmtree('./wcnf')
+        if os.path.exists('./dimacs'):
+            shutil.rmtree('./dimacs')
+        if os.path.exists('./eprime'):
+            shutil.rmtree('./eprime')

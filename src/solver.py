@@ -571,6 +571,7 @@ class RCPSPSolver:
         start = timeit.default_timer()
         if self.__method == 'sat':
             self.__start_time_for_first_activity(self.__solver.add_clause)
+            self.__start_time_constraint(self.__solver.add_clause)
             self.__precedence_constraint(self.__solver.add_clause)
             # self.__resource_constraints()
             self.__resource_constraints_with_pbamo()
@@ -833,36 +834,29 @@ class RCPSPSolver:
                 add_clause([-self.__run[i, t], self.__run[i, t + 1],
                             self.__start[i, t - self.__problem.durations[i] + 1]])
 
+    def __start_time_constraint(self, add_clause):
+        for i in range(1, self.__problem.number_of_activities):
+            add_clause(
+                [self.__get_forward_staircase_register(i, self.__ES[i], self.__LS[i] + 1,
+                                                       add_clause)])
+
     def __precedence_constraint(self, add_clause):
         for predecessor in range(1, self.__problem.number_of_activities):
             for successor in self.__problem.precedence_graph.successors(predecessor):
-                # Successor can only start at one time
-                add_clause(
-                    [self.__get_forward_staircase_register(successor, self.__ES[successor],
-                                                           self.__LS[successor] + 1, add_clause)])
-                # Predecessor can only start at one time
-                add_clause(
-                    [self.__get_forward_staircase_register(predecessor, self.__ES[predecessor],
-                                                           self.__LS[predecessor] + 1, add_clause)])
-
                 # Precedence constraint
                 for k in range(self.__ES[successor], self.__LS[successor] + 1):
+                    if k - self.__problem.durations[predecessor] + 1 >= self.__LS[predecessor] + 1:
+                        continue
+
                     first_half = self.__get_forward_staircase_register(successor,
                                                                        self.__ES[successor],
                                                                        k + 1, add_clause)
-
-                    if first_half is None or k - self.__problem.durations[predecessor] + 1 >= \
-                            self.__LS[predecessor] + 1:
-                        continue
 
                     t = k - self.__problem.durations[predecessor] + 1
                     if t < self.__ES[predecessor]:
                         t = self.__ES[predecessor]
 
-                    add_clause(
-                        [-first_half,
-                         -self.__start[
-                             predecessor, t]])
+                    add_clause([-first_half, -self.__start[predecessor, t]])
                 else:
                     for k in range(
                             self.__LS[successor] - self.__problem.durations[predecessor] + 2,
@@ -937,8 +931,9 @@ class RCPSPSolver:
         for job in range(self.__problem.number_of_activities):
             for predecessor in self.__problem.precedence_graph.predecessors(job):
                 if solution[job] < solution[predecessor] + self.__problem.durations[predecessor]:
-                    logging.info(
+                    logging.error(
                         f"Failed when checking precedence constraint for {predecessor} -> {job}")
+                    print(f"Failed when checking precedence constraint for {predecessor} -> {job}")
                     exit(-1)
 
         # Checking resource constraint
@@ -949,6 +944,8 @@ class RCPSPSolver:
                     if solution[j] <= t <= solution[j] + self.__problem.durations[j] - 1:
                         total_consume += self.__problem.requests[j][r]
                 if total_consume > self.__problem.capacities[r]:
+                    logging.error(
+                        f"Failed when check resource constraint for resource {r} at t = {t}")
                     print(f"Failed when check resource constraint for resource {r} at t = {t}")
                     exit(-1)
 

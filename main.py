@@ -4,6 +4,7 @@ import logging
 import multiprocessing
 import os
 import shutil
+import sys
 import time
 import timeit
 
@@ -75,6 +76,11 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None):
                     time.sleep(0.1)
 
                 p.join()
+
+                if p.exitcode != 0:  # Non-zero exit code means error
+                    print(f"Process exited with code {p.exitcode}. Terminating main program.")
+                    sys.exit(p.exitcode)
+
                 p.terminate()
                 stats = queue.get()
                 stats['name'] = row.name

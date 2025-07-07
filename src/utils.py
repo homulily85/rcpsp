@@ -26,7 +26,7 @@ def get_project_root() -> Path:
     return Path(__file__).parent.parent
 
 
-def create_eprime_file(pbs: list[tuple[list[int], list[int], int]]) -> tuple[str, set[int]]:
+def create_eprime_file(pbs: list[tuple[list[int], list[int], int]]) -> str:
     """
     Create an EPrime file from a list of pseudo-Boolean constraints.
     :param pbs: A list of pseudo-Boolean constraints, where each constraint is a tuple of (literals, weights, bound).
@@ -42,6 +42,10 @@ def create_eprime_file(pbs: list[tuple[list[int], list[int], int]]) -> tuple[str
     for pb in pbs:
         if len(pb[0]) == 1 and pb[1][0] == 1 and pb[2] == 1:
             continue
+
+        if sum(pb[1]) == pb[2]:
+            continue
+
         unique_literals.update(pb[0])
         clause = '+'.join(f"{w}*x{l}" for l, w in zip(pb[0], pb[1]))
         clause += f"<={pb[2]}"
@@ -54,7 +58,7 @@ def create_eprime_file(pbs: list[tuple[list[int], list[int], int]]) -> tuple[str
         f.write("such that\n")
         f.write("/\\\n".join(clauses))
 
-    return file_path, unique_literals
+    return file_path
 
 
 class SOLVER_STATUS(Enum):
@@ -201,67 +205,58 @@ class SATSolver:
             "number_of_calls": self.__number_of_calls
         }
 
-    def __parse_eprime_file(self, file_path: str, input_literals: set[int] | list[int]):
+    def __parse_eprime_file(self, file_path: str):
         literals_mapping = {}
         auxiliary_mapping = {}
         literal_found = set()
 
         with open(file_path, "r") as f:
             while True:
-                pos = f.tell()
-                line1 = f.readline()
+                line = f.readline()
 
-                if line1.startswith('p'):
-                    continue
-
-                if not line1:
+                if not line:
                     break  # EOF
 
+                if line.startswith('p'):
+                    continue
+
                 # Check if the line is an "Encoding variable" comment
-                if line1.startswith("c Encoding variable:"):
-                    var_line = line1
+                if line.startswith("c Encoding variable:"):
+                    var_line = line
                     sat_line = f.readline()
                     var_match = re.search(r'x\d+', var_line)
                     sat_match = re.search(r'\d+', sat_line)
                     if var_match and sat_match:
                         literals_mapping[int(sat_match.group())] = int(var_match.group()[1:])
                         literal_found.add(int(var_match.group()[1:]))
-                else:
-                    f.seek(pos)  # rewind to previous line if it doesn't match
-                    break  # stop reading mapping section
 
-            for line in f:
-                if line.startswith('c'):
+                elif line.startswith("c"):
                     continue
 
-                raw = list(map(int, line.split(' ')))
+                else:
+                    raw = list(map(int, line.split(' ')))
 
-                clause = []
+                    clause = []
 
-                for var in raw:
-                    if var == 0:
-                        continue
+                    for var in raw:
+                        if var == 0:
+                            continue
 
-                    if abs(var) in literals_mapping:
-                        clause.append(
-                            literals_mapping[var] if var > 0 else literals_mapping[abs(var)] * -1)
+                        if abs(var) in literals_mapping:
+                            clause.append(
+                                literals_mapping[var] if var > 0 else -literals_mapping[abs(var)])
 
-                    else:
-                        if abs(var) not in auxiliary_mapping:
-                            auxiliary_mapping[abs(var)] = self.create_new_variable()
+                        else:
+                            if abs(var) not in auxiliary_mapping:
+                                auxiliary_mapping[abs(var)] = self.create_new_variable()
 
-                        clause.append(
-                            auxiliary_mapping[var] if var > 0 else auxiliary_mapping[abs(var)] * -1
-                        )
+                            clause.append(
+                                auxiliary_mapping[var] if var > 0 else -auxiliary_mapping[abs(var)])
 
-                self.add_clause(clause)
-
-        # for literal in input_literals:
-        #     if literal not in literal_found:
-        #         self.add_clause([-literal])
+                    self.add_clause(clause)
 
     def add_pb_clauses(self, pbs: list[tuple[list[int], list[int], int]]):
-        eprime_path, input_literals = create_eprime_file(pbs)
+        eprime_path = create_eprime_file(pbs)
 
         os.makedirs(os.path.join(get_project_root(), 'dimacs'), exist_ok=True)
         output_file_path = os.path.join(get_project_root(), 'dimacs',
@@ -270,10 +265,11 @@ class SATSolver:
         command = (f"{get_project_root()}/bin/savilerow/savilerow {eprime_path} "
                    f"-sat -sat-pb-mdd -amo-detect -out-sat {output_file_path} ")
 
-        process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL)
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL)
         process.wait()
 
-        self.__parse_eprime_file(output_file_path, input_literals)
+        self.__parse_eprime_file(output_file_path)
 
 
 class MaxSATSolver:

@@ -10,6 +10,7 @@ import timeit
 
 import pandas as pd
 import psutil
+from fontTools.cffLib import privateDictOperators
 
 from src.solver import RCPSPSolver, Problem
 
@@ -27,7 +28,7 @@ def process_instance(file_path: str, input_format: str, method: str, lower_bound
     queue.put(s.get_statistics())
 
 
-def benchmark(data_set_name: str, method: str, time_limit: int = None):
+def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_from: str = None):
     """
     Benchmark a dataset.
     """
@@ -38,11 +39,19 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None):
 
     bound = pd.read_csv(f'./bound/bound_{data_set_name}.csv')
 
-    stat = pd.DataFrame(columns=['name', 'lower_bound', 'upper_bound', 'variables', 'clauses',
-                                 'hard_clauses', 'soft_clauses', 'status', 'makespan',
-                                 'encoding_time', 'total_solving_time', 'memory_usage'])
+    if continue_from is None:
+        stat = pd.DataFrame(columns=['name', 'lower_bound', 'upper_bound', 'variables', 'clauses',
+                                     'hard_clauses', 'soft_clauses', 'status', 'makespan',
+                                     'encoding_time', 'total_solving_time', 'memory_usage'])
+    else:
+        stat = pd.read_csv(continue_from)
+
     try:
         for row in bound.itertuples():
+            if row.name in stat['name'].values:
+                logging.info(f"Skipping {row.name}, already processed.")
+                continue
+
             file_path = f'./data_set/{data_set_name}/{row.name}'
             lower_bound = row.lower_bound
             upper_bound = row.upper_bound
@@ -136,9 +145,12 @@ def main():
     parser.add_argument('--time_limit', type=int, help='Time limit for solving one instance.',
                         default=None)
 
+    parser.add_argument('--continue_from', type=str, help='Result file name to continue from.',
+                        default=None)
+
     args = parser.parse_args()
 
-    benchmark(args.dataset_name, args.method, args.time_limit)
+    benchmark(args.dataset_name, args.method, args.time_limit,args.continue_from)
 
 
 if __name__ == "__main__":

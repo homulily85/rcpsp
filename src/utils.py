@@ -79,11 +79,11 @@ class SATSolver:
         Initialize the SAT solver.
         """
         self.__number_of_variables = 0
-        self.__number_of_clauses = 0
-        self.__solver = Glucose4(use_timer=True, incr=True)
+        self.__solver = None
         self.__assumption = set()
         self.__last_feasible_model = None
         self.__number_of_calls = 0
+        self.__temp_clauses = set()
 
     def create_new_variable(self) -> int:
         """
@@ -98,8 +98,7 @@ class SATSolver:
         Add a clause to the SAT solver.
         :param clause: The clause to be added.
         """
-        self.__number_of_clauses += 1
-        self.__solver.add_clause(clause)
+        self.__temp_clauses.add(tuple(sorted(clause)))
 
     def solve(self, time_limit=None) -> bool | None:
         """
@@ -108,6 +107,10 @@ class SATSolver:
         """
         if time_limit is not None and time_limit <= 0:
             return None
+
+        if self.__solver is None:
+            self.__solver = Glucose4(bootstrap_with=self.__temp_clauses, use_timer=True, incr=True)
+
         logging.info(f"Solving the SAT call {self.__number_of_calls}...")
         self.__number_of_calls += 1
         start = timeit.default_timer()
@@ -191,8 +194,8 @@ class SATSolver:
         :return: A dictionary containing the statistics of the SAT solver."""
         return {
             "variables": self.__number_of_variables,
-            "clauses": self.__number_of_clauses,
-            "hard_clauses": self.__number_of_clauses,
+            "clauses": len(self.__temp_clauses),
+            "hard_clauses": len(self.__temp_clauses),
             "soft_clauses": 0,
             "total_solving_time": round(self.__solver.time_accum(), 5),
             "number_of_calls": self.__number_of_calls
@@ -253,9 +256,9 @@ class SATSolver:
 
                 self.add_clause(clause)
 
-        for literal in input_literals:
-            if literal not in literal_found:
-                self.add_clause([-literal])
+        # for literal in input_literals:
+        #     if literal not in literal_found:
+        #         self.add_clause([-literal])
 
     def add_pb_clauses(self, pbs: list[tuple[list[int], list[int], int]]):
         eprime_path, input_literals = create_eprime_file(pbs)
@@ -288,11 +291,8 @@ class MaxSATSolver:
         self.__return_code = None
         self.__time_used = 0
         self.__number_of_variables = 0
-        self.__number_of_clauses = 0
-        self.__number_of_soft_clauses = 0
-        self.__number_of_hard_clauses = 0
-        self.__soft_clauses: list[tuple[list[int], int]] = []
-        self.__hard_clauses = []
+        self.__soft_clauses: set[tuple[tuple[int, ...], int]] = set()
+        self.__hard_clauses = set()
         self.__model = None
 
     def create_new_variable(self) -> int:
@@ -308,9 +308,7 @@ class MaxSATSolver:
         Add a clause to the SAT solver.
         :param clause: The clause to be added.
         """
-        self.__number_of_clauses += 1
-        self.__number_of_hard_clauses += 1
-        self.__hard_clauses.append(clause)
+        self.__hard_clauses.add(tuple(sorted(clause)))
 
     def add_soft_clause(self, clause: list[int], weight: int):
         """
@@ -321,10 +319,7 @@ class MaxSATSolver:
         """
         if weight <= 0:
             raise ValueError("Weight of a soft clause must be greater than 0.")
-        self.__number_of_clauses += 1
-        self.__number_of_soft_clauses += 1
-        self.__soft_clauses.append((clause, weight))
-        self.__number_of_soft_clauses += 1
+        self.__soft_clauses.add((tuple(sorted(clause)), weight))
 
     def solve(self, time_limit=None) -> SOLVER_STATUS:
         """
@@ -469,8 +464,8 @@ class MaxSATSolver:
         :return: A dictionary containing the statistics of the SAT solver."""
         return {
             "variables": self.__number_of_variables,
-            "clauses": self.__number_of_clauses,
-            "hard_clauses": self.__number_of_hard_clauses,
-            "soft_clauses": self.__number_of_soft_clauses,
+            "clauses": len(self.__soft_clauses) + len(self.__hard_clauses),
+            "hard_clauses": len(self.__hard_clauses),
+            "soft_clauses": len(self.__soft_clauses),
             "total_solving_time": round(self.__time_used, 5)
         }

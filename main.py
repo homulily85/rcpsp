@@ -10,7 +10,6 @@ import timeit
 
 import pandas as pd
 import psutil
-from fontTools.cffLib import privateDictOperators
 
 from src.solver import RCPSPSolver, Problem
 
@@ -28,7 +27,8 @@ def process_instance(file_path: str, input_format: str, method: str, lower_bound
     queue.put(s.get_statistics())
 
 
-def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_from: str = None):
+def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_from: str = None,
+              non_optimal_only: bool = False):
     """
     Benchmark a dataset.
     """
@@ -40,17 +40,29 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_
     bound = pd.read_csv(f'./bound/bound_{data_set_name}.csv')
 
     if continue_from is None:
-        stat = pd.DataFrame(columns=['name', 'lower_bound', 'upper_bound', 'variables', 'clauses',
-                                     'hard_clauses', 'soft_clauses', 'status', 'makespan',
-                                     'encoding_time', 'total_solving_time', 'memory_usage'])
+        dataset_stats = pd.DataFrame(
+            columns=['name', 'lower_bound', 'upper_bound', 'variables', 'clauses',
+                     'hard_clauses', 'soft_clauses', 'status', 'makespan',
+                     'encoding_time', 'total_solving_time', 'memory_usage'])
     else:
-        stat = pd.read_csv(continue_from)
+        dataset_stats = pd.read_csv(continue_from)
 
     try:
         for row in bound.itertuples():
-            if row.name in stat['name'].values:
-                logging.info(f"Skipping {row.name}, already processed.")
-                continue
+            replace = False
+
+            if row.name in dataset_stats['name'].values:
+                if not non_optimal_only:
+                    logging.info(f"Skipping {row.name}, already processed.")
+                    continue
+
+                elif non_optimal_only and \
+                        dataset_stats.loc[dataset_stats['name'] == row.name, 'status'].values[
+                            0] == 'OPTIMAL':
+                    logging.info(f"Skipping {row.name}, already optimal.")
+                    continue
+
+                replace = True
 
             file_path = f'./data_set/{data_set_name}/{row.name}'
             lower_bound = row.lower_bound
@@ -91,15 +103,27 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_
                     sys.exit(p.exitcode)
 
                 p.terminate()
-                stats = queue.get()
-                stats['name'] = row.name
-                stats['memory_usage'] = round(peak_memory / (1024 ** 2), 5)
-                stat = pd.concat([stat, pd.DataFrame([stats])], ignore_index=True)
-                stat = stat.drop('file_path', axis=1)
+                current_instance_stats = queue.get()
+                current_instance_stats['name'] = row.name
+                current_instance_stats['memory_usage'] = round(peak_memory / (1024 ** 2), 5)
+                current_instance_stats.pop('file_path')
+
+                if replace:
+                    current_instance_stats.pop('file_path', None)
+                    index = dataset_stats[dataset_stats['name'] == row.name].index
+                    if not index.empty:
+                        for key, value in current_instance_stats.items():
+                            if key in dataset_stats.columns:
+                                dataset_stats.at[index[0], key] = value
+
+                else:
+                    dataset_stats = pd.concat([dataset_stats, pd.DataFrame([current_instance_stats])],
+                                          ignore_index=True)
+                    # dataset_stats = dataset_stats.drop('file_path', axis=1)
             except Exception as e:
                 logging.error(f"Error processing {file_path}: {e}")
 
-        export_result(data_set_name, method, stat)
+        export_result(data_set_name, method, dataset_stats)
 
         end = timeit.default_timer()
 
@@ -108,7 +132,7 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_
         )
     except KeyboardInterrupt:
         logging.error("Benchmarking interrupted by user.")
-        export_result(data_set_name, method, stat)
+        export_result(data_set_name, method, dataset_stats)
 
 
 def export_result(data_set_name, method, stat):
@@ -148,9 +172,12 @@ def main():
     parser.add_argument('--continue_from', type=str, help='Result file name to continue from.',
                         default=None)
 
+    parser.add_argument('--non_optimal_only', action='store_true',
+                        help='Only process instances that are not optimal.')
     args = parser.parse_args()
 
-    benchmark(args.dataset_name, args.method, args.time_limit,args.continue_from)
+    benchmark(args.dataset_name, args.method, args.time_limit, args.continue_from,
+              args.non_optimal_only)
 
 
 if __name__ == "__main__":

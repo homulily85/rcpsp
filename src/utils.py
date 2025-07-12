@@ -43,11 +43,14 @@ def create_eprime_file(pbs: list[tuple[list[int], list[int], int]]) -> str:
         if len(pb[0]) == 1 and pb[1][0] == 1 and pb[2] == 1:
             continue
 
-        if sum(pb[1]) == pb[2]:
+        if sum(pb[1]) <= pb[2]:
             continue
 
         unique_literals.update(pb[0])
-        clause = '+'.join(f"{w}*x{l}" for l, w in zip(pb[0], pb[1]))
+        clause = '+'.join(f"{w}*x{l}" for l, w in zip(pb[0], pb[1]) if w != 0)
+        if not clause:
+            continue
+
         clause += f"<={pb[2]}"
         clauses.append(clause)
 

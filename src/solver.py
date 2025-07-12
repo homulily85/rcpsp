@@ -748,7 +748,10 @@ class RCPSPSolver:
 
     def __resource_constraints_with_pbamo(self):
         pb_clauses = []
+        used = set()
         for t in range(self.__upper_bound):
+            # pb_clauses = []
+            # used = set()
             for r in range(self.__problem.number_of_resources):
                 literals = []
                 weights = []
@@ -756,6 +759,7 @@ class RCPSPSolver:
                     if t in range(self.__ES[i], self.__LC[i]):
                         literals.append(self.__run[i, t])
                         weights.append(self.__problem.requests[i][r])
+                        used.add(self.__run[i, t])
 
                 pb_clauses.append((literals, weights, self.__problem.capacities[r]))
 
@@ -786,7 +790,8 @@ class RCPSPSolver:
                 og_path_cover.append([index_to_label[i] for i in path])
 
             for p in og_path_cover:
-                pb_clauses.append(([self.__run[i, t] for i in p], [1 for _ in p], 1))
+                pb_clauses.append(([self.__run[i, t] for i in p if self.__run[i, t] in used],
+                                   [1 for i in p if self.__run[i, t] in used], 1))
 
         self.__solver.add_pb_clauses(pb_clauses)
 

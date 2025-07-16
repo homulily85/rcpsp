@@ -3,6 +3,7 @@ import datetime
 import logging
 import multiprocessing
 import os
+import re
 import shutil
 import sys
 import time
@@ -28,41 +29,56 @@ def process_instance(file_path: str, input_format: str, method: str, lower_bound
 
 
 def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_from: str = None,
-              non_optimal_only: bool = False):
+              start: str = None, end: str = None, num_concurrent_processes: int = 1):
     """
     Benchmark a dataset.
     """
     logging.info(
         f"Benchmarking dataset: {data_set_name}"
     )
-    start = timeit.default_timer()
+    start_time = timeit.default_timer()
 
     bound = pd.read_csv(f'./bound/bound_{data_set_name}.csv')
+    if start is not None or end is not None:
+        def custom_key(s):
+            return [int(num) for num in re.findall(r'\d+', s)]
+
+        start_key = custom_key(start) if start is not None else None
+        end_key = custom_key(end) if end is not None else None
+
+        bound['_name_key'] = bound['name'].map(custom_key)
+
+        # Now compare row-wise using list comparisons
+        if start_key and end_key:
+            bound = bound[
+                (bound['_name_key'].map(lambda x: x >= start_key)) &
+                (bound['_name_key'].map(lambda x: x <= end_key))
+                ]
+        elif start_key:
+            bound = bound[
+                bound['_name_key'].map(lambda x: x >= start_key)
+            ]
+        elif end_key:
+            bound = bound[
+                bound['_name_key'].map(lambda x: x <= end_key)
+            ]
+
+        bound = bound.drop(columns=['_name_key'])
 
     if continue_from is None:
         dataset_stats = pd.DataFrame(
             columns=['name', 'lower_bound', 'upper_bound', 'variables', 'clauses',
                      'hard_clauses', 'soft_clauses', 'status', 'makespan',
                      'encoding_time', 'total_solving_time', 'memory_usage'])
+
     else:
         dataset_stats = pd.read_csv(continue_from)
 
     try:
         for row in bound.itertuples():
-            replace = False
-
             if row.name in dataset_stats['name'].values:
-                if not non_optimal_only:
-                    logging.info(f"Skipping {row.name}, already processed.")
-                    continue
-
-                elif non_optimal_only and \
-                        dataset_stats.loc[dataset_stats['name'] == row.name, 'status'].values[
-                            0] == 'OPTIMAL':
-                    logging.info(f"Skipping {row.name}, already optimal.")
-                    continue
-
-                replace = True
+                logging.info(f"Skipping {row.name}, already processed.")
+                continue
 
             file_path = f'./data_set/{data_set_name}/{row.name}'
             lower_bound = row.lower_bound
@@ -103,23 +119,12 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_
                     sys.exit(p.exitcode)
 
                 p.terminate()
-                current_instance_stats = queue.get()
-                current_instance_stats['name'] = row.name
-                current_instance_stats['memory_usage'] = round(peak_memory / (1024 ** 2), 5)
-                current_instance_stats.pop('file_path')
-
-                if replace:
-                    current_instance_stats.pop('file_path', None)
-                    index = dataset_stats[dataset_stats['name'] == row.name].index
-                    if not index.empty:
-                        for key, value in current_instance_stats.items():
-                            if key in dataset_stats.columns:
-                                dataset_stats.at[index[0], key] = value
-
-                else:
-                    dataset_stats = pd.concat([dataset_stats, pd.DataFrame([current_instance_stats])],
+                instance_stats = queue.get()
+                del instance_stats['file_path']
+                instance_stats['name'] = row.name
+                instance_stats['memory_usage'] = round(peak_memory / (1024 ** 2), 5)
+                dataset_stats = pd.concat([dataset_stats, pd.DataFrame([instance_stats])],
                                           ignore_index=True)
-                    # dataset_stats = dataset_stats.drop('file_path', axis=1)
             except Exception as e:
                 logging.error(f"Error processing {file_path}: {e}")
 
@@ -128,7 +133,7 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_
         end = timeit.default_timer()
 
         logging.info(
-            f"Finished benchmarking dataset: {data_set_name} in {end - start:.2f} seconds"
+            f"Finished benchmarking dataset: {data_set_name} in {end - start_time:.2f} seconds"
         )
     except KeyboardInterrupt:
         logging.error("Benchmarking interrupted by user.")
@@ -145,6 +150,9 @@ def export_result(data_set_name, method, stat):
         'SATISFIABLE': stat['status'].str.contains('SATISFIABLE').sum(),
         'OPTIMAL': stat['status'].str.contains('OPTIMAL').sum(),
         'UNKNOWN': stat['status'].str.contains('UNKNOWN').sum(),
+        'average_preprocessing_time': stat['preprocessing_time'].mean(),
+        'max_preprocessing_time': stat['preprocessing_time'].max(),
+        'min_preprocessing_time': stat['preprocessing_time'].min(),
         'average_encoding_time': stat['encoding_time'].mean(),
         "max_encoding_time": stat['encoding_time'].max(),
         "min_encoding_time": stat['encoding_time'].min(),
@@ -171,24 +179,31 @@ def main():
 
     parser.add_argument('--continue_from', type=str, help='Result file name to continue from.',
                         default=None)
+    parser.add_argument('--cleanup', type=bool, default=False,
+                        help='Cleanup temporary files after execution.')
+    parser.add_argument('--start', type=str, default=None,
+                        help='Start instance name for processing.')
+    parser.add_argument('--end', type=str, default=None,
+                        help='End instance name for processing.')
+    parser.add_argument('--num_concurrent_processes', type=int, default=1,
+                        help='Number of concurrent processes to use for benchmarking.')
 
-    parser.add_argument('--non_optimal_only', action='store_true',
-                        help='Only process instances that are not optimal.')
     args = parser.parse_args()
+    try:
+        benchmark(args.dataset_name, args.method, args.time_limit, args.continue_from, args.start,
+                  args.end, args.num_concurrent_processes)
 
-    benchmark(args.dataset_name, args.method, args.time_limit, args.continue_from,
-              args.non_optimal_only)
+    finally:
+        if args.cleanup:
+            if os.path.exists('./out'):
+                shutil.rmtree('./out')
+            if os.path.exists('./wcnf'):
+                shutil.rmtree('./wcnf')
+            if os.path.exists('./dimacs'):
+                shutil.rmtree('./dimacs')
+            if os.path.exists('./eprime'):
+                shutil.rmtree('./eprime')
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    finally:
-        if os.path.exists('./out'):
-            shutil.rmtree('./out')
-        if os.path.exists('./wcnf'):
-            shutil.rmtree('./wcnf')
-        if os.path.exists('./dimacs'):
-            shutil.rmtree('./dimacs')
-        if os.path.exists('./eprime'):
-            shutil.rmtree('./eprime')
+    main()

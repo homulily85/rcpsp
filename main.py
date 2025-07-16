@@ -1,4 +1,5 @@
 import argparse
+import concurrent
 import datetime
 import logging
 import multiprocessing
@@ -27,18 +28,52 @@ def process_instance(file_path: str, input_format: str, method: str, lower_bound
     s.verify()
     queue.put(s.get_statistics())
 
+def worker(args):
+    file_path, input_format, method, lower_bound, upper_bound, time_limit = args
+
+    queue = multiprocessing.Queue()
+    p = multiprocessing.Process(target=process_instance, args=(
+        file_path, input_format, method, lower_bound, upper_bound, time_limit, queue))
+    p.start()
+
+    peak_memory = 0
+    while p.is_alive():
+        try:
+            proc = psutil.Process(p.pid)
+            mem = proc.memory_info().rss
+            for child in proc.children(recursive=True):
+                try:
+                    mem += child.memory_info().rss
+                except psutil.NoSuchProcess:
+                    continue
+            peak_memory = max(peak_memory, mem)
+        except psutil.NoSuchProcess:
+            break
+        time.sleep(0.1)
+
+    p.join()
+
+    if p.exitcode != 0:
+        raise RuntimeError(f"Process for {file_path} failed with exit code {p.exitcode}")
+
+    p.terminate()
+    instance_stats = queue.get()
+    instance_stats['name'] = file_path.split('/')[-1]
+    instance_stats['memory_usage'] = round(peak_memory / (1024 ** 2), 5)
+    return instance_stats
 
 def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_from: str = None,
               start: str = None, end: str = None, num_concurrent_processes: int = 1):
     """
-    Benchmark a dataset.
+    Benchmark a dataset using concurrent.futures.ProcessPoolExecutor.
+    If any process fails, terminate all and exit immediately.
     """
-    logging.info(
-        f"Benchmarking dataset: {data_set_name}"
-    )
+    logging.info(f"Benchmarking dataset: {data_set_name}")
     start_time = timeit.default_timer()
 
     bound = pd.read_csv(f'./bound/bound_{data_set_name}.csv')
+
+    # Optional filtering using custom_key
     if start is not None or end is not None:
         def custom_key(s):
             return [int(num) for num in re.findall(r'\d+', s)]
@@ -48,12 +83,11 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_
 
         bound['_name_key'] = bound['name'].map(custom_key)
 
-        # Now compare row-wise using list comparisons
         if start_key and end_key:
             bound = bound[
                 (bound['_name_key'].map(lambda x: x >= start_key)) &
                 (bound['_name_key'].map(lambda x: x <= end_key))
-                ]
+            ]
         elif start_key:
             bound = bound[
                 bound['_name_key'].map(lambda x: x >= start_key)
@@ -66,79 +100,63 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_
         bound = bound.drop(columns=['_name_key'])
 
     if continue_from is None:
-        dataset_stats = pd.DataFrame(
-            columns=['name', 'lower_bound', 'upper_bound', 'variables', 'clauses',
-                     'hard_clauses', 'soft_clauses', 'status', 'makespan',
-                     'encoding_time', 'total_solving_time', 'memory_usage'])
-
+        dataset_stats = pd.DataFrame(columns=[
+            'name', 'lower_bound', 'upper_bound', 'variables', 'clauses',
+            'hard_clauses', 'soft_clauses', 'status', 'makespan',
+            'encoding_time', 'total_solving_time', 'memory_usage'
+        ])
     else:
         dataset_stats = pd.read_csv(continue_from)
 
+    tasks = []
+    for row in bound.itertuples():
+        if row.name in dataset_stats['name'].values:
+            logging.info(f"Skipping {row.name}, already processed.")
+            continue
+
+        tasks.append((
+            f'./data_set/{data_set_name}/{row.name}',
+            'psplib' if data_set_name not in ['pack', 'pack_d'] else 'pack',
+            method,
+            row.lower_bound,
+            row.upper_bound,
+            time_limit
+        ))
+
+    executor = concurrent.futures.ProcessPoolExecutor(max_workers=num_concurrent_processes)
+    futures = []
+
     try:
-        for row in bound.itertuples():
-            if row.name in dataset_stats['name'].values:
-                logging.info(f"Skipping {row.name}, already processed.")
-                continue
+        for task in tasks:
+            futures.append(executor.submit(worker, task))
 
-            file_path = f'./data_set/{data_set_name}/{row.name}'
-            lower_bound = row.lower_bound
-            upper_bound = row.upper_bound
-
-            logging.info("_" * 50)
-            logging.info(f"Processing instance: {file_path}")
-
+        for future in concurrent.futures.as_completed(futures):
             try:
-                queue = multiprocessing.Queue()
-                p = multiprocessing.Process(target=process_instance,
-                                            args=(file_path,
-                                                  'psplib' if data_set_name not in ['pack',
-                                                                                    'pack_d'] else 'pack',
-                                                  method, lower_bound, upper_bound, time_limit,
-                                                  queue))
-                p.start()
-                peak_memory = 0
-
-                while p.is_alive():
-                    try:
-                        proc = psutil.Process(p.pid)
-                        mem = proc.memory_info().rss
-                        for child in proc.children(recursive=True):
-                            try:
-                                mem += child.memory_info().rss
-                            except psutil.NoSuchProcess:
-                                continue
-                        peak_memory = max(peak_memory, mem)
-                    except psutil.NoSuchProcess:
-                        break
-                    time.sleep(0.1)
-
-                p.join()
-
-                if p.exitcode != 0:  # Non-zero exit code means error
-                    print(f"Process exited with code {p.exitcode}. Terminating main program.")
-                    sys.exit(p.exitcode)
-
-                p.terminate()
-                instance_stats = queue.get()
-                del instance_stats['file_path']
-                instance_stats['name'] = row.name
-                instance_stats['memory_usage'] = round(peak_memory / (1024 ** 2), 5)
-                dataset_stats = pd.concat([dataset_stats, pd.DataFrame([instance_stats])],
+                result = future.result()
+                result.pop('file_path', None)
+                dataset_stats = pd.concat([dataset_stats, pd.DataFrame([result])],
                                           ignore_index=True)
+
             except Exception as e:
-                logging.error(f"Error processing {file_path}: {e}")
+                logging.error(f"Worker failed: {e}")
+                for f in futures:
+                    f.cancel()
+                executor.shutdown(wait=False, cancel_futures=True)
+                export_result(data_set_name, method, dataset_stats)
+                sys.exit(1)
 
-        export_result(data_set_name, method, dataset_stats)
-
-        end = timeit.default_timer()
-
-        logging.info(
-            f"Finished benchmarking dataset: {data_set_name} in {end - start_time:.2f} seconds"
-        )
     except KeyboardInterrupt:
-        logging.error("Benchmarking interrupted by user.")
+        logging.error("Benchmarking interrupted by user. Terminating remaining tasks...")
+        for f in futures:
+            f.cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
         export_result(data_set_name, method, dataset_stats)
+        logging.info("Partial results exported after interruption.")
+        sys.exit(1)
 
+    export_result(data_set_name, method, dataset_stats)
+    end = timeit.default_timer()
+    logging.info(f"Benchmarking completed in {end - start_time:.2f} seconds.")
 
 def export_result(data_set_name, method, stat):
     os.makedirs('./result', exist_ok=True)

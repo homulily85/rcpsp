@@ -56,7 +56,7 @@ case "$@" in
         fi
     ;;
     *)
-        java -Xss8m -ea -XX:ParallelGCThreads=1 -Djava.library.path="$DIR"/lib/ -Xmx8G -jar "$DIR/savilerow.jar" "${MINION_ARG1}" "${MINION_ARG2}" "${CHUFFED_ARG1}" "${CHUFFED_ARG2}" "${SYMDETECT_ARG1}" "${SYMDETECT_ARG2}" "${KISSAT_ARG1}" "${KISSAT_ARG2}" "$@"
+        java -Xss32m -ea -XX:ParallelGCThreads=1 -Djava.library.path="$DIR"/lib/ -Xmx8G -jar "$DIR/savilerow.jar" "${MINION_ARG1}" "${MINION_ARG2}" "${CHUFFED_ARG1}" "${CHUFFED_ARG2}" "${SYMDETECT_ARG1}" "${SYMDETECT_ARG2}" "${KISSAT_ARG1}" "${KISSAT_ARG2}" "$@"
     ;;
 esac
 

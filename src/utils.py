@@ -268,8 +268,7 @@ class SATSolver:
         command = (f"{get_project_root()}/bin/savilerow/savilerow {eprime_path} "
                    f"-sat -sat-pb-mdd -amo-detect -out-sat {output_file_path} ")
 
-        process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL,
-                                   stderr=subprocess.DEVNULL)
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL)
         process.wait()
 
         self.__parse_eprime_file(output_file_path)

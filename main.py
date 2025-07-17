@@ -194,10 +194,9 @@ def main():
                         help='The type of solver to use.')
     parser.add_argument('--time_limit', type=int, help='Time limit for solving one instance.',
                         default=None)
-
     parser.add_argument('--continue_from', type=str, help='Result file name to continue from.',
                         default=None)
-    parser.add_argument('--cleanup', type=bool, default=False,
+    parser.add_argument('--cleanup', action='store_true',
                         help='Cleanup temporary files after execution.')
     parser.add_argument('--start', type=str, default=None,
                         help='Start instance name for processing.')

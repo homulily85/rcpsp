@@ -9,12 +9,13 @@ import timeit
 from enum import Enum, auto
 from pathlib import Path
 from threading import Timer
+from typing import Iterable
 
 from pysat.pb import PBEnc, EncType
 from pysat.solvers import Glucose4
 
 
-def generate_random_filename():
+def generate_random_filename() -> str:
     """Generate a random filename with 5 alphanumeric characters."""
     characters = string.ascii_letters + string.digits
     random_str = ''.join(secrets.choice(characters) for _ in range(5))
@@ -28,10 +29,12 @@ def get_project_root() -> Path:
 
 def create_eprime_file(pbs: list[tuple[list[int], list[int], int]]) -> str:
     """
-    Create an EPrime file from a list of pseudo-Boolean constraints.
-    :param pbs: A list of pseudo-Boolean constraints, where each constraint is a tuple of (literals, weights, bound).
-                Example: [([1, 2], [3, 4], 5), ([3, 4], [1, 2], 6)]
-    :return: A tuple containing the file path of the created EPrime file and a set of unique literals used in the constraints.
+    Create an EPrime file from the given pseudo-Boolean constraints (pbs).
+    Args:
+        pbs (list[tuple[list[int], list[int], int]]): A list of pseudo-Boolean constraints,
+            where each constraint is a tuple of (literals, weights, bound). Example: [([1, 2], [3, 4], 5), ([3, 4], [1, 2], 6)]
+    Returns:
+        The path to the created EPrime file.
     """
     os.makedirs(os.path.join(get_project_root(), 'eprime'), exist_ok=True)
     file_path = os.path.join(get_project_root(), 'eprime', f'{generate_random_filename()}.eprime')
@@ -95,28 +98,49 @@ class SATSolver:
     def create_new_variable(self) -> int:
         """
         Create a new variable in the SAT solver.
-        :return: The index of the new variable.
+
+        Returns:
+            int: The index of the new variable.
         """
         self.__number_of_variables += 1
         return self.__number_of_variables
 
-    def add_clause(self, clause: list[int]):
+    def add_clause(self, clause: Iterable[int]):
         """
         Add a clause to the SAT solver.
-        :param clause: The clause to be added.
+
+        Args:
+            clause (Iterable[int]): The clause to be added.
         """
         self.__temp_clauses.add(tuple(sorted(clause)))
 
     def solve(self, time_limit=None) -> bool | None:
         """
         Solve the SAT problem using the current clauses.
-        :return: The status of the solver after attempting to solve the problem.
+
+        Args:
+            time_limit (int): Optional time limit for the solver in seconds. If None, no time limit is applied.
+        Returns:
+            bool | None: True if the problem is satisfiable, False if it is unsatisfiable,
+                         None if the problem could not be solved within the time limit.
+        Raises:
+            ValueError: If the time limit is less than or equal to 0.
         """
         if time_limit is not None and time_limit <= 0:
-            return None
+            raise ValueError("Time limit must be greater than 0.")
 
         if self.__solver is None:
+            logging.info(
+                "Sorting the clauses and initializing the SAT solver with the current clauses..."
+            )
+            t = timeit.default_timer()
+            self.__temp_clauses = sorted(self.__temp_clauses, key=lambda t: (len(t), t))
             self.__solver = Glucose4(bootstrap_with=self.__temp_clauses, use_timer=True, incr=True)
+
+            logging.info(
+                f"Finished initializing the SAT solver with {len(self.__temp_clauses)} clauses in "
+                f"{round(timeit.default_timer() - t, 5)} seconds."
+            )
 
         logging.info(f"Solving the SAT call {self.__number_of_calls}...")
         self.__number_of_calls += 1
@@ -149,56 +173,52 @@ class SATSolver:
     def get_last_feasible_model(self) -> list[int] | None:
         """
         Get the last feasible model from the SAT solver.
-        :return: The last feasible model as a list of integers or None if no model is available.
+
+        Returns:
+            The last feasible model as a list of integers or None if no model is available.
         """
         return self.__last_feasible_model
 
     def get_model(self) -> list[int] | None:
         """
         Get the model from the SAT solver if it is satisfiable.
-        :return: The model as a list of integers or None if the problem is unsatisfiable.
+        Returns:
+             The model as a list of integers or None if the problem is unsatisfiable.
         """
         return self.__solver.get_model()
 
     def add_assumption(self, assumption: int):
         """
         Add an assumption to the SAT solver.
-        :param assumption: The assumption to be added.
+        Args:
+             assumption (int): The assumption to be added.
         """
         self.__assumption.add(assumption)
 
-    def add_at_most_k(self, literals: list[int], weights: list[int], k: int):
-        """
-        Add a weighted at most k constraint to the SAT solver.
-        :param literals: List of literals involved in the constraint.
-        :param weights: List of weights corresponding to each literal.
-        :param k: The bound for the weighted at most k constraint.
-        """
-        cnf = PBEnc.leq(lits=literals, weights=weights, bound=k,
-                        top_id=self.__number_of_variables, encoding=EncType.bdd).clauses
-
-        if not cnf:
-            return
-
-        new_variable_max_index = -1
-        for clause in cnf:
-            for var in clause:
-                if abs(var) > new_variable_max_index:
-                    new_variable_max_index = abs(var)
-        if new_variable_max_index == -1:
-            return
-
-        self.__number_of_variables = max(new_variable_max_index, self.__number_of_variables)
-        for clause in cnf:
-            self.add_clause(clause)
-
     def clear_interrupt(self):
+        """
+        Clear any interrupt set on the SAT solver.
+        This method is used to reset the interrupt state of the solver, allowing it to continue solving
+        if it was interrupted.
+
+        """
         self.__solver.clear_interrupt()
 
     def get_statistics(self) -> dict[str, int | float]:
         """
         Get the statistics of the SAT solver.
-        :return: A dictionary containing the statistics of the SAT solver."""
+
+        Returns:
+            dict[str, int | float]: A dictionary containing the statistics of the SAT solver.
+
+            This dictionary keys include:
+                - "variables": The number of variables in the SAT solver.
+                - "clauses": The number of clauses in the SAT solver.
+                - "hard_clauses": The number of hard clauses in the SAT solver.
+                - "soft_clauses": The number of soft clauses in the SAT solver (always 0 for this class).
+                - "total_solving_time": The total time spent solving the SAT problem.
+                - "number_of_calls": The number of times the solver has been called.
+        """
         return {
             "variables": self.__number_of_variables,
             "clauses": len(self.__temp_clauses),
@@ -259,6 +279,20 @@ class SATSolver:
                     self.add_clause(clause)
 
     def add_pb_clauses(self, pbs: list[tuple[list[int], list[int], int]]):
+        """
+        Add pseudo-Boolean constraints to the SAT solver.
+        This method creates an EPrime file from the given pseudo-Boolean constraints and
+        uses the Savile Row tool to convert it into a DIMACS file, which is then parsed
+        to add clauses to the SAT solver.
+
+        Args:
+            pbs (list[tuple[list[int], list[int], int]]): A list of pseudo-Boolean constraints,
+                where each constraint is a tuple of (literals, weights, bound).
+                Example: [([1, 2], [3, 4], 5), ([3, 4], [1, 2], 6)]
+
+        Returns:
+
+        """
         eprime_path = create_eprime_file(pbs)
 
         os.makedirs(os.path.join(get_project_root(), 'dimacs'), exist_ok=True)

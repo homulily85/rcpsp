@@ -43,15 +43,18 @@ __setup_logging()
 class Problem:
     """
     Class to represent a problem instance for the RCPSP.
-    This class is responsible for parsing the problem instance from a file
     """
 
     def __init__(self, file_path: str, input_format: str):
         """
         Initialize the problem instance by parsing the input file.
-        :param file_path: Path to the input file containing the problem instance.
-        :param input_format: Format of the input file ('psplib', 'pack').
-        :raises ValueError: If the input format is not supported.
+
+        Args:
+            file_path (str): Path to the problem instance file.
+            input_format (str): Format of the input file, either 'psplib' or 'pack'.
+        Raises:
+            ValueError: If the input format is not supported.
+
         """
         if input_format not in ['psplib', 'pack']:
             logging.critical('Unsupported input format. Supported formats are: psplib, pack.')
@@ -82,7 +85,9 @@ class Problem:
     def file_path(self) -> str:
         """
         Get the file path of the problem instance.
-        :return: File path of the problem instance.
+
+        Returns:
+            str: The file path of the problem instance.
         """
         return self.__file_path
 
@@ -90,7 +95,9 @@ class Problem:
     def capacities(self) -> list[int]:
         """
         Get the capacities of the resources.
-        :return: List of capacities for each resource.
+
+        Returns:
+            list[int]: List of capacities for each resource.
         """
         return self.__capacities
 
@@ -98,7 +105,9 @@ class Problem:
     def number_of_activities(self) -> int:
         """
         Get the number of activities in the problem instance.
-        :return: Number of activities.
+
+        Returns:
+            int: Number of activities (including dummy start and end activities).
         """
         return self.__number_of_activities
 
@@ -106,7 +115,9 @@ class Problem:
     def number_of_resources(self) -> int:
         """
         Get the number of resources in the problem instance.
-        :return: Number of resources.
+
+        Returns:
+            int: Number of renewable resources.
         """
         return self.__number_of_resources
 
@@ -114,7 +125,10 @@ class Problem:
     def requests(self) -> list[list[int]]:
         """
         Get the resource requests for each activity.
-        :return: List of resource requests for each activity.
+
+        Returns:
+            list[list[int]]: List of resource requests for each activity.
+            Each sublist corresponds to an activity and contains the requests for each resource.
         """
         return self.__requests
 
@@ -122,7 +136,9 @@ class Problem:
     def precedence_graph(self) -> nx.DiGraph:
         """
         Get the precedence graph of the problem instance.
-        :return: A directed graph representing the precedence constraints between activities.
+
+        Returns:
+            nx.DiGraph: The directed graph representing the precedence relations between activities.
         """
         return self.__precedence_graph
 
@@ -130,7 +146,9 @@ class Problem:
     def durations(self) -> list[int]:
         """
         Get the durations of each activity.
-        :return: List of durations for each activity.
+
+        Returns:
+            list[int]: List of durations for each activity (including dummy start and end activities).
         """
         return self.__durations
 
@@ -225,8 +243,23 @@ class Problem:
 
 
 class RCPSPSolver:
+    """
+    Class to solve the Resource-Constrained Project Scheduling Problem (RCPSP) using SAT or MAXSAT solvers.
+    """
+
     def __init__(self, problem: Problem, method: str, lower_bound: int = None,
                  upper_bound: int = None):
+        """
+        Initialize the RCPSP solver with a problem instance and method.
+        Args:
+            problem (Problem): The problem instance to solve.
+            method (str): The method to use for solving the problem, either 'sat' or 'maxsat'.
+            lower_bound (int, optional): The lower bound for the makespan. If None, it will be calculated.
+            upper_bound (int, optional): The upper bound for the makespan. If None, it will be calculated.
+        Raises:
+            ValueError: If the method is not 'sat' or 'maxsat', or if the bounds are invalid.
+
+        """
         self.__makespan_var = None
         self.__register = {}
         self.__problem = problem
@@ -567,6 +600,10 @@ class RCPSPSolver:
         return math.ceil(1 / self.__problem.capacities[k] * temp)
 
     def encode(self):
+        """
+        Encode the problem instance into the solver's format.
+
+        """
         logging.info('Encoding the problem instance...')
         if self.__failed_preprocessing:
             return
@@ -576,10 +613,9 @@ class RCPSPSolver:
             self.__start_time_for_first_activity(self.__solver.add_clause)
             self.__start_time_constraint(self.__solver.add_clause)
             self.__precedence_constraint(self.__solver.add_clause)
-            # self.__resource_constraints()
             self.__resource_constraints_with_pbamo()
             self.__consistency_constraint(self.__solver.add_clause)
-            self.__backpropagate_constraint(self.__solver.add_clause)
+            # self.__backpropagate_constraint(self.__solver.add_clause)
         elif self.__method == 'maxsat':
             self.__start_time_for_first_activity(self.__solver.add_hard_clause)
             self.__start_time_constraint(self.__solver.add_hard_clause)
@@ -593,6 +629,17 @@ class RCPSPSolver:
         logging.info(f"Encoding finished in {self.__encoding_time} seconds.")
 
     def solve(self, time_limit=None, find_optimal: bool = False) -> SOLVER_STATUS:
+        """
+        Solve the encoded problem instance.
+        Args:
+            time_limit (int, optional): Time limit for the solver in seconds. If None, no time limit is set.
+            find_optimal (bool, optional): If True, find the optimal solution. Defaults to False.
+
+        Returns:
+            SOLVER_STATUS: The status of the solver after attempting to solve the problem.
+            Possible values are SATISFIABLE, UNSATISFIABLE, OPTIMAL, or UNKNOWN.
+
+        """
         if self.__failed_preprocessing:
             self.__status = SOLVER_STATUS.UNSATISFIABLE
             return self.__status
@@ -647,14 +694,30 @@ class RCPSPSolver:
                 if time_limit is None:
                     result = self.__solver.solve()
                 else:
-                    result = self.__solver.solve(
-                        time_limit - self.__solver.get_statistics()['total_solving_time'])
+                    try:
+                        result = self.__solver.solve(
+                            time_limit - self.__solver.get_statistics()['total_solving_time'])
+                    except ValueError:
+                        pass
 
             self.__status = SOLVER_STATUS.SATISFIABLE if result is None else SOLVER_STATUS.OPTIMAL
             return self.__status
 
     def get_schedule(self, get_graph=False, save_graph_to_file=False, graph_width=None,
                      graph_height=None) -> list[int] | None:
+        """
+        Retrieve the schedule after solving the problem instance.
+        Args:
+            get_graph (bool, optional): If True, generate a graph of the schedule. Defaults to False.
+            save_graph_to_file (bool, optional): If True, save the graph to a file. Defaults to False.
+            graph_width (int, optional): Width of the graph. Defaults to None.
+            graph_height (int, optional): Height of the graph. Defaults to None.
+
+        Returns:
+            list[int] | None: The schedule as a list of start times for each activity, or None if the problem is unsatisfiable or unknown.
+            If the value of get_graph is True, a graph of the schedule is generated and displayed or saved to a file.
+
+        """
         if self.__status in [SOLVER_STATUS.UNSATISFIABLE, SOLVER_STATUS.UNKNOWN]:
             return None
 
@@ -765,7 +828,7 @@ class RCPSPSolver:
                         weights.append(self.__problem.requests[i][r])
                         temp_jobs.append(i)
 
-                if sum(weights)> self.__problem.capacities[r]:
+                if sum(weights) > self.__problem.capacities[r]:
                     pb_clauses.append((literals, weights, self.__problem.capacities[r]))
                     used.update(temp_jobs)
 
@@ -775,10 +838,10 @@ class RCPSPSolver:
                 nodes = []
                 count = 0
                 for i in used:
-                        index_to_label[count] = i
-                        label_to_index[i] = count
-                        nodes.append(count)
-                        count += 1
+                    index_to_label[count] = i
+                    label_to_index[i] = count
+                    nodes.append(count)
+                    count += 1
                 g.add_nodes_from(nodes)
 
                 edges = []
@@ -896,6 +959,8 @@ class RCPSPSolver:
     def verify(self):
         """
         Verify the solution of the problem.
+        This method checks if the solution satisfies all constraints, including precedence and resource constraints.
+        If any constraint is violated, it logs an error and exits the program.
         """
         # Get start time
         solution = self.get_schedule()
@@ -933,7 +998,23 @@ class RCPSPSolver:
     def get_statistics(self) -> dict[str, int | float]:
         """
         Get the statistics of the solver.
-        :return: Dictionary containing the statistics of the solver.
+
+        Returns:
+            dict[str, int | float]: A dictionary containing various statistics about the solving process.
+
+            This dictionary includes:
+                - file_path: The path to the problem file.
+                - lower_bound: The lower bound of the problem.
+                - upper_bound: The upper bound of the problem.
+                - variables: The number of variables used in the solver.
+                - clauses: The number of clauses used in the solver.
+                - hard_clauses: The number of hard clauses used in the solver.
+                - soft_clauses: The number of soft clauses used in the solver.
+                - status: The status of the solver (e.g., SATISFIABLE, UNSATISFIABLE, OPTIMAL, UNKNOWN).
+                - makespan: The makespan of the schedule, if available.
+                - preprocessing_time: The time taken for preprocessing the problem.
+                - encoding_time: The time taken for encoding the problem.
+                - total_solving_time: The total time taken to solve the problem.
         """
         t = self.__solver.get_statistics()
         self.get_schedule()
@@ -954,5 +1035,9 @@ class RCPSPSolver:
         }
 
     def clear_interrupt(self):
+        """
+        Clear any interrupt set on the solver.
+        This method is used to reset the solver's state if it has been interrupted.
+        """
         if self.__method == 'sat':
             self.__solver.clear_interrupt()

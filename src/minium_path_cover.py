@@ -4,10 +4,15 @@ from typing import List
 def minimum_path_cover(n: int, edges: List[List[int]]) -> List[List[int]]:
     """
     Calculate the minimum path cover of a given DAG.
-    n: number of nodes in the DAG (nodes labeled 0..n-1)
-    edges: list of (from, to) edges
-    Returns a list of paths, each path is a list of node IDs.
-    Behavior is undefined if the graph has cycles.
+    Args:
+        n (int): number of nodes in the DAG (nodes labeled 0...n-1)
+        edges (list[list[int]]): list of (from, to) edges
+
+    Returns:
+         list: a list of paths, each path is a list of node IDs.
+
+    Notes:
+        Behavior is undefined if the graph has cycles.
     """
     # Build inedges and outedges
     inedges: List[List[int]] = [[] for _ in range(n)]
@@ -34,7 +39,7 @@ def minimum_path_cover(n: int, edges: List[List[int]]) -> List[List[int]]:
 def to_bipartite_graph(n: int, inedges: List[List[int]], outedges: List[List[int]]) -> List[
     List[int]]:
     """
-    Split each node into left (0..n-1) and right (n..2n-1) vertices
+    Split each node into left (0...n-1) and right (n...2n-1) vertices
     Left vertices have outgoing edges; right have incoming.
     """
     size = 2 * n

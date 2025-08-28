@@ -16,7 +16,7 @@ from networkx.drawing.nx_pydot import graphviz_layout
 from psplib import parse
 
 from src.minium_path_cover import minimum_path_cover
-from src.utils import SATSolver, MaxSATSolver, SOLVER_STATUS, get_project_root, \
+from src.utils import SATSolver, SOLVER_STATUS, get_project_root, \
     generate_random_filename
 
 
@@ -244,16 +244,15 @@ class Problem:
 
 class RCPSPSolver:
     """
-    Class to solve the Resource-Constrained Project Scheduling Problem (RCPSP) using SAT or MAXSAT solvers.
+    Class to solve the Resource-Constrained Project Scheduling Problem (RCPSP) using SAT solver.
     """
 
-    def __init__(self, problem: Problem, method: str, lower_bound: int = None,
+    def __init__(self, problem: Problem, lower_bound: int = None,
                  upper_bound: int = None):
         """
         Initialize the RCPSP solver with a problem instance and method.
         Args:
             problem (Problem): The problem instance to solve.
-            method (str): The method to use for solving the problem, either 'sat' or 'maxsat'.
             lower_bound (int, optional): The lower bound for the makespan. If None, it will be calculated.
             upper_bound (int, optional): The upper bound for the makespan. If None, it will be calculated.
         Raises:
@@ -263,10 +262,6 @@ class RCPSPSolver:
         self.__makespan_var = None
         self.__register = {}
         self.__problem = problem
-
-        if method not in ['sat', 'maxsat']:
-            logging.critical("Method must be either 'SAT' or 'MAXSAT'.")
-            raise ValueError("Method must be either 'SAT' or 'MAXSAT'.")
 
         if lower_bound is not None and upper_bound is not None:
             if lower_bound < 0 or upper_bound < 0:
@@ -284,22 +279,15 @@ class RCPSPSolver:
             if upper_bound is None or upper_bound < lower_bound:
                 upper_bound = t[1]
 
-        self.__method = method
         self.__lower_bound = lower_bound
         self.__upper_bound = upper_bound
         self.__makespan = self.__upper_bound
         self.__failed_preprocessing = False
         self.__schedule = None
-        self.__solver: SATSolver | MaxSATSolver | None = None
+        self.__solver = SATSolver()
         self.__status = None
         self.__encoding_time = 0
         self.__preprocessing_time = 0
-
-        if self.__method == 'sat':
-            self.__solver = SATSolver()
-        elif self.__method == 'maxsat':
-            self.__solver = MaxSATSolver()
-
         self.__preprocessing()
 
     def __calculate_bound(self):
@@ -609,21 +597,12 @@ class RCPSPSolver:
             return
 
         start = timeit.default_timer()
-        if self.__method == 'sat':
-            self.__start_time_for_first_activity(self.__solver.add_clause)
-            self.__start_time_constraint(self.__solver.add_clause)
-            self.__precedence_constraint(self.__solver.add_clause)
-            self.__resource_constraints_with_pbamo()
-            self.__consistency_constraint(self.__solver.add_clause)
-            self.__backpropagate_constraint(self.__solver.add_clause)
-        elif self.__method == 'maxsat':
-            self.__start_time_for_first_activity(self.__solver.add_hard_clause)
-            self.__start_time_constraint(self.__solver.add_hard_clause)
-            self.__precedence_constraint(self.__solver.add_hard_clause)
-            self.__resource_constraints()
-            self.__consistency_constraint(self.__solver.add_hard_clause)
-            self.__backpropagate_constraint(self.__solver.add_hard_clause)
-
+        self.__start_time_for_first_activity()
+        self.__start_time_constraint()
+        self.__precedence_constraint()
+        self.__resource_constraints_with_pbamo()
+        self.__consistency_constraint()
+        self.__backpropagate_constraint()
         self.__encoding_time = round(timeit.default_timer() - start, 5)
 
         logging.info(f"Encoding finished in {self.__encoding_time} seconds.")
@@ -652,30 +631,6 @@ class RCPSPSolver:
             else:
                 self.__status = SOLVER_STATUS.SATISFIABLE if results else SOLVER_STATUS.UNSATISFIABLE
                 return self.__status
-
-        if self.__method == 'maxsat':
-            start = timeit.default_timer()
-            self.__makespan_var = {}
-            for i in range(self.__lower_bound, self.__upper_bound + 1):
-                self.__makespan_var[i] = self.__solver.create_new_variable()
-
-            for t in range(self.__lower_bound, self.__upper_bound + 1):
-                if self.__ES[self.__problem.number_of_activities - 1] <= t <= self.__LS[
-                    self.__problem.number_of_activities - 1]:
-                    self.__solver.add_hard_clause(
-                        [self.__makespan_var[t],
-                         -self.__start[self.__problem.number_of_activities - 1, t]])
-
-            for t in range(self.__lower_bound, self.__upper_bound):
-                self.__solver.add_hard_clause([self.__makespan_var[t], -self.__makespan_var[t + 1]])
-
-            for t in range(self.__lower_bound, self.__upper_bound + 1):
-                self.__solver.add_soft_clause([-self.__makespan_var[t]], 1)
-
-            self.__encoding_time += round(timeit.default_timer() - start, 5)
-
-            self.__status = self.__solver.solve(time_limit)
-            return self.__status
         else:
             result = self.__solver.solve(time_limit)
             if result is None:
@@ -728,20 +683,13 @@ class RCPSPSolver:
             start_times = [-1 for _ in range(self.__problem.number_of_activities)]
 
             def get_start_time(activity: int) -> int:
-                if self.__method == 'sat':
-                    for s in range(self.__ES[activity], self.__LS[activity] + 1):
-                        if self.__solver.get_last_feasible_model()[
-                            self.__start[(activity, s)] - 1] > 0:
-                            return s
-                    raise Exception(
-                        f"Start time for activity {activity} not found in the solution.")
+                for s in range(self.__ES[activity], self.__LS[activity] + 1):
+                    if self.__solver.get_last_feasible_model()[
+                        self.__start[(activity, s)] - 1] > 0:
+                        return s
+                raise Exception(
+                    f"Start time for activity {activity} not found in the solution.")
 
-                else:
-                    for s in range(self.__ES[activity], self.__LS[activity] + 1):
-                        if self.__solver.get_model()[self.__start[(activity, s)] - 1] > 0:
-                            return s
-                    raise Exception(
-                        f"Start time for activity {activity} not found in the solution.")
 
             # Set your desired max number of threads
             max_threads = os.cpu_count()
@@ -797,22 +745,8 @@ class RCPSPSolver:
             )
         return self.__schedule
 
-    def __start_time_for_first_activity(self, add_clause):
-        # add_clause is either self.__solver.add_clause or self.__solver.add_hard_clause
-        add_clause([self.__start[(0, 0)]])
-
-    def __resource_constraints(self):
-        for t in range(self.__upper_bound):
-            for r in range(self.__problem.number_of_resources):
-                literals = []
-                weights = []
-                for i in range(1, self.__problem.number_of_activities):
-                    if t in range(self.__ES[i], self.__LC[i]):
-                        literals.append(self.__run[i, t])
-                        weights.append(self.__problem.requests[i][r])
-
-                self.__solver.add_at_most_k(literals=literals, weights=weights,
-                                            k=self.__problem.capacities[r])
+    def __start_time_for_first_activity(self):
+        self.__solver.add_clause([self.__start[(0, 0)]])
 
     def __resource_constraints_with_pbamo(self):
         pb_clauses = []
@@ -860,25 +794,24 @@ class RCPSPSolver:
 
         self.__solver.add_pb_clauses(pb_clauses)
 
-    def __consistency_constraint(self, add_clause):
+    def __consistency_constraint(self):
         for i in range(self.__problem.number_of_activities):
             for s in range(self.__ES[i], self.__LS[i] + 1):
                 for t in range(s, s + self.__problem.durations[i]):
-                    add_clause([-self.__start[i, s], self.__run[i, t]])
+                    self.__solver.add_clause([-self.__start[i, s], self.__run[i, t]])
 
-    def __backpropagate_constraint(self, add_clause):
+    def __backpropagate_constraint(self):
         for i in range(self.__problem.number_of_activities):
             for t in range(self.__EC[i], self.__LC[i] - 1):
-                add_clause([-self.__run[i, t], self.__run[i, t + 1],
-                            self.__start[i, t - self.__problem.durations[i] + 1]])
+                self.__solver.add_clause([-self.__run[i, t], self.__run[i, t + 1],
+                                          self.__start[i, t - self.__problem.durations[i] + 1]])
 
-    def __start_time_constraint(self, add_clause):
+    def __start_time_constraint(self):
         for i in range(1, self.__problem.number_of_activities):
-            add_clause(
-                [self.__get_forward_staircase_register(i, self.__ES[i], self.__LS[i] + 1,
-                                                       add_clause)])
+            self.__solver.add_clause(
+                [self.__get_forward_staircase_register(i, self.__ES[i], self.__LS[i] + 1)])
 
-    def __precedence_constraint(self, add_clause):
+    def __precedence_constraint(self):
         for predecessor in range(1, self.__problem.number_of_activities):
             for successor in self.__problem.precedence_graph.successors(predecessor):
                 # Precedence constraint
@@ -888,26 +821,24 @@ class RCPSPSolver:
 
                     first_half = self.__get_forward_staircase_register(successor,
                                                                        self.__ES[successor],
-                                                                       k + 1, add_clause)
+                                                                       k + 1)
 
                     t = k - self.__problem.durations[predecessor] + 1
                     if t < self.__ES[predecessor]:
                         t = self.__ES[predecessor]
 
-                    add_clause([-first_half, -self.__start[predecessor, t]])
+                    self.__solver.add_clause([-first_half, -self.__start[predecessor, t]])
                 else:
                     for k in range(
                             self.__LS[successor] - self.__problem.durations[predecessor] + 2,
                             self.__LS[predecessor] + 1):
-                        add_clause(
+                        self.__solver.add_clause(
                             [-self.__get_forward_staircase_register(successor,
                                                                     self.__ES[successor],
-                                                                    self.__LS[successor] + 1,
-                                                                    add_clause),
+                                                                    self.__LS[successor] + 1),
                              -self.__start[predecessor, k]])
 
-    def __get_forward_staircase_register(self, job: int, start: int, end: int,
-                                         add_clause) -> int | None:
+    def __get_forward_staircase_register(self, job: int, start: int, end: int) -> int | None:
         """Get forward staircase register for a job for a range of time [start, end)"""
         # Check if current job with provided start and end time is already in the register
         if start >= end:
@@ -929,26 +860,26 @@ class RCPSPSolver:
                 # Create constraint for staircase
 
                 # If current tuple is true then the register associated with it must be true
-                add_clause(
+                self.__solver.add_clause(
                     [-self.__start[(job, s)], self.__register[current_tuple]])
 
                 if s == start:
-                    add_clause(
+                    self.__solver.add_clause(
                         [self.__start[(job, s)], -self.__register[current_tuple]])
                 else:
                     # Get the previous tuple
                     previous_tuple = tuple(accumulative[:-1])
                     # If previous tuple is true then the current register must be true
-                    add_clause(
+                    self.__solver.add_clause(
                         [-self.__register[previous_tuple], self.__register[current_tuple]])
 
                     # Both previous tuple and current variable is false then current tuple must be false
-                    add_clause(
+                    self.__solver.add_clause(
                         [self.__register[previous_tuple], self.__start[job, s],
                          -self.__register[current_tuple]])
 
                     # Previous tuple and current variable must not be true at the same time
-                    add_clause(
+                    self.__solver.add_clause(
                         [-self.__register[previous_tuple], -self.__start[(job, s)]])
 
         return self.__register[temp]
@@ -1005,8 +936,6 @@ class RCPSPSolver:
                 - upper_bound: The upper bound of the problem.
                 - variables: The number of variables used in the solver.
                 - clauses: The number of clauses used in the solver.
-                - hard_clauses: The number of hard clauses used in the solver.
-                - soft_clauses: The number of soft clauses used in the solver.
                 - status: The status of the solver (e.g., SATISFIABLE, UNSATISFIABLE, OPTIMAL, UNKNOWN).
                 - makespan: The makespan of the schedule, if available.
                 - preprocessing_time: The time taken for preprocessing the problem.
@@ -1022,8 +951,6 @@ class RCPSPSolver:
             'upper_bound': self.__upper_bound,
             'variables': t['variables'],
             'clauses': t['clauses'],
-            'hard_clauses': t['hard_clauses'],
-            'soft_clauses': t['soft_clauses'],
             'status': self.__status.name,
             'makespan': self.__schedule[-1] if self.__schedule is not None else None,
             'preprocessing_time': self.__preprocessing_time,
@@ -1036,5 +963,4 @@ class RCPSPSolver:
         Clear any interrupt set on the solver.
         This method is used to reset the solver's state if it has been interrupted.
         """
-        if self.__method == 'sat':
-            self.__solver.clear_interrupt()
+        self.__solver.clear_interrupt()

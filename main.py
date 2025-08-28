@@ -16,24 +16,24 @@ import psutil
 from src.solver import RCPSPSolver, Problem
 
 
-def process_instance(file_path: str, input_format: str, method: str, lower_bound: int = None,
+def process_instance(file_path: str, input_format: str, lower_bound: int = None,
                      upper_bound: int = None, time_limit: int = None,
                      queue: multiprocessing.Queue = None):
     """
     Process a single instance of the given path.
     """
-    s = RCPSPSolver(Problem(file_path, input_format), method, lower_bound, upper_bound)
+    s = RCPSPSolver(Problem(file_path, input_format), lower_bound, upper_bound)
     s.encode()
     s.solve(time_limit, find_optimal=True)
     s.verify()
     queue.put(s.get_statistics())
 
 def worker(args):
-    file_path, input_format, method, lower_bound, upper_bound, time_limit = args
+    file_path, input_format, lower_bound, upper_bound, time_limit = args
 
     queue = multiprocessing.Queue()
     p = multiprocessing.Process(target=process_instance, args=(
-        file_path, input_format, method, lower_bound, upper_bound, time_limit, queue))
+        file_path, input_format, lower_bound, upper_bound, time_limit, queue))
     p.start()
 
     peak_memory = 0
@@ -62,7 +62,7 @@ def worker(args):
     instance_stats['memory_usage'] = round(peak_memory / (1024 ** 2), 5)
     return instance_stats
 
-def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_from: str = None,
+def benchmark(data_set_name: str, time_limit: int = None, continue_from: str = None,
               start: str = None, end: str = None, num_concurrent_processes: int = 1):
     """
     Benchmark a dataset using concurrent.futures.ProcessPoolExecutor.
@@ -117,7 +117,6 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_
         tasks.append((
             f'./data_set/{data_set_name}/{row.name}',
             'psplib' if data_set_name not in ['pack', 'pack_d'] else 'pack',
-            method,
             row.lower_bound,
             row.upper_bound,
             time_limit
@@ -142,7 +141,7 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_
                 for f in futures:
                     f.cancel()
                 executor.shutdown(wait=False, cancel_futures=True)
-                export_result(data_set_name, method, dataset_stats)
+                export_result(data_set_name, dataset_stats)
                 sys.exit(1)
 
     except KeyboardInterrupt:
@@ -150,18 +149,18 @@ def benchmark(data_set_name: str, method: str, time_limit: int = None, continue_
         for f in futures:
             f.cancel()
         executor.shutdown(wait=False, cancel_futures=True)
-        export_result(data_set_name, method, dataset_stats)
+        export_result(data_set_name, dataset_stats)
         logging.info("Partial results exported after interruption.")
         sys.exit(1)
 
-    export_result(data_set_name, method, dataset_stats)
+    export_result(data_set_name, dataset_stats)
     end = timeit.default_timer()
     logging.info(f"Benchmarking completed in {end - start_time:.2f} seconds.")
 
-def export_result(data_set_name, method, stat):
+def export_result(data_set_name, stat):
     os.makedirs('./result', exist_ok=True)
     stat.to_csv(
-        f'./result/{data_set_name}_{method.upper()}_{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv',
+        f'./result/{data_set_name}_STAIRCASE_{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv',
         index=False)
     report = pd.DataFrame([{
         'UNSATISFIABLE': stat['status'].str.contains('UNSATISFIABLE').sum(),
@@ -182,16 +181,13 @@ def export_result(data_set_name, method, stat):
         "min_memory_usage": stat['memory_usage'].min(),
     }])
     report.T.reset_index().to_csv(
-        f'./result/report_{data_set_name}_{method.upper()}_{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv',
+        f'./result/report_{data_set_name}_STAIRCASE_{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv',
         index=False)
 
 
 def main():
     parser = argparse.ArgumentParser(description='Benchmarking script for SAT encoders.')
     parser.add_argument('dataset_name', type=str, help='The name of the dataset to benchmark.')
-    parser.add_argument('method', type=str,
-                        choices=['sat', 'maxsat'],
-                        help='The type of solver to use.')
     parser.add_argument('--time_limit', type=int, help='Time limit for solving one instance.',
                         default=None)
     parser.add_argument('--continue_from', type=str, help='Result file name to continue from.',
@@ -207,20 +203,17 @@ def main():
 
     args = parser.parse_args()
     try:
-        benchmark(args.dataset_name, args.method, args.time_limit, args.continue_from, args.start,
+        benchmark(args.dataset_name, args.time_limit, args.continue_from, args.start,
                   args.end, args.num_concurrent_processes)
 
     finally:
         if args.cleanup:
             if os.path.exists('./out'):
                 shutil.rmtree('./out')
-            if os.path.exists('./wcnf'):
-                shutil.rmtree('./wcnf')
             if os.path.exists('./dimacs'):
                 shutil.rmtree('./dimacs')
             if os.path.exists('./eprime'):
                 shutil.rmtree('./eprime')
-
 
 if __name__ == "__main__":
     main()

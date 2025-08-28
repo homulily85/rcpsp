@@ -1,4 +1,3 @@
-import datetime
 import logging
 import math
 import os
@@ -20,48 +19,29 @@ from src.utils import SATSolver, SOLVER_STATUS, get_project_root, \
     generate_random_filename
 
 
-def __setup_logging():
-    project_root = str(get_project_root())
-    if not os.path.exists(project_root + '/log'):
-        os.makedirs(project_root + '/log')
-    filename = f'{project_root}/log/{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}'.replace(
-        ':', '-') + '.log'
-    with open(filename, 'w'):
-        pass
-
-    logging.basicConfig(
-        filename=filename,
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-    )
-
-
-__setup_logging()
-
-
-class Problem:
+class RCPSPProblem:
     """
     Class to represent a problem instance for the RCPSP.
     """
 
-    def __init__(self, file_path: str, input_format: str):
+    def __init__(self, file_path: str):
         """
         Initialize the problem instance by parsing the input file.
 
         Args:
             file_path (str): Path to the problem instance file.
-            input_format (str): Format of the input file, either 'psplib' or 'pack'.
         Raises:
             ValueError: If the input format is not supported.
-
+        Notes:
+            Input file must be either .sm or .rcp format.
         """
-        if input_format not in ['psplib', 'pack']:
-            logging.critical('Unsupported input format. Supported formats are: psplib, pack.')
-            raise ValueError('Unsupported input format. Supported formats are: psplib, pack.')
+        _, file_extension = os.path.splitext(file_path)
+        if file_extension not in ['.sm', '.rcp']:
+            logging.critical('Unsupported input format. Supported formats are: .sm, .rcp')
+            raise ValueError('Unsupported input format. Supported formats are: .sm, .rcp')
         file_path = os.path.abspath(file_path)
         logging.info(
-            f"Parsing the problem instance from {file_path} in {input_format} format...")
+            f"Parsing the problem instance from {file_path}")
         start = timeit.default_timer()
 
         self.__file_path = file_path
@@ -72,13 +52,13 @@ class Problem:
         self.__requests = None
         self.__capacities = None
 
-        if input_format == 'psplib':
-            self.__psplib_parse(file_path)
-        elif input_format == 'pack':
-            self.__pack_parse(file_path)
+        if file_extension == '.sm':
+            self.__sm_parse(file_path)
+        elif file_extension == '.rcp':
+            self.__rcp_parse(file_path)
 
         logging.info(
-            f"Finished parsing the problem instance from {file_path} in {input_format} format.")
+            f"Finished parsing the problem instance from {file_path}")
         logging.info(f"Parsing time: {round(timeit.default_timer() - start, 5)} seconds.")
 
     @property
@@ -152,7 +132,7 @@ class Problem:
         """
         return self.__durations
 
-    def __psplib_parse(self, file_path):
+    def __sm_parse(self, file_path):
         """
         Parse the problem instance from a PSPLIB file.
         """
@@ -180,7 +160,7 @@ class Problem:
         self.__capacities = [instance.resources[i].capacity
                              for i in range(self.__number_of_resources)]
 
-    def __pack_parse(self, file_path):
+    def __rcp_parse(self, file_path):
         """
         Parse the problem instance from a PACK file.
         """
@@ -247,12 +227,11 @@ class RCPSPSolver:
     Class to solve the Resource-Constrained Project Scheduling Problem (RCPSP) using SAT solver.
     """
 
-    def __init__(self, problem: Problem, lower_bound: int = None,
-                 upper_bound: int = None):
+    def __init__(self, problem: RCPSPProblem, lower_bound: int = None, upper_bound: int = None):
         """
-        Initialize the RCPSP solver with a problem instance and method.
+        Initialize the RCPSP solver with a problem instance.
         Args:
-            problem (Problem): The problem instance to solve.
+            problem (RCPSPProblem): The problem instance to solve.
             lower_bound (int, optional): The lower bound for the makespan. If None, it will be calculated.
             upper_bound (int, optional): The upper bound for the makespan. If None, it will be calculated.
         Raises:
@@ -658,20 +637,14 @@ class RCPSPSolver:
             self.__status = SOLVER_STATUS.SATISFIABLE if result is None else SOLVER_STATUS.OPTIMAL
             return self.__status
 
-    def get_schedule(self, get_graph=False, save_graph_to_file=False, graph_width=None,
-                     graph_height=None) -> list[int] | None:
+    def get_schedule(self) -> list[int] | None:
         """
         Retrieve the schedule after solving the problem instance.
         Args:
             get_graph (bool, optional): If True, generate a graph of the schedule. Defaults to False.
-            save_graph_to_file (bool, optional): If True, save the graph to a file. Defaults to False.
-            graph_width (int, optional): Width of the graph. Defaults to None.
-            graph_height (int, optional): Height of the graph. Defaults to None.
 
         Returns:
             list[int] | None: The schedule as a list of start times for each activity, or None if the problem is unsatisfiable or unknown.
-            If the value of get_graph is True, a graph of the schedule is generated and displayed or saved to a file.
-
         """
         if self.__status in [SOLVER_STATUS.UNSATISFIABLE, SOLVER_STATUS.UNKNOWN]:
             return None
@@ -689,7 +662,6 @@ class RCPSPSolver:
                         return s
                 raise Exception(
                     f"Start time for activity {activity} not found in the solution.")
-
 
             # Set your desired max number of threads
             max_threads = os.cpu_count()
@@ -713,37 +685,45 @@ class RCPSPSolver:
             logging.info(
                 f"Schedule retrieved successfully in {round(timeit.default_timer() - start, 5)} seconds.")
 
-        if get_graph:
-            logging.info(f'Building the schedule graph...')
-            start = timeit.default_timer()
-            g = self.__problem.precedence_graph.copy()
-            for i in range(self.__problem.number_of_activities):
-                nx.relabel_nodes(g, {i: f'{i}({self.__schedule[i]})'}, copy=False)
-
-            if graph_width is not None and graph_height is not None:
-                plt.figure(figsize=(graph_width, graph_height))
-            else:
-                plt.figure(figsize=(15, 15))  # Set the figure size here
-            pos = graphviz_layout(g, prog='dot')
-            nx.draw_networkx(g, pos)
-            edge_labels = nx.get_edge_attributes(g, 'weight')
-            nx.draw_networkx_edge_labels(g, pos, edge_labels=edge_labels)
-
-            if save_graph_to_file:
-                os.makedirs(os.path.join(get_project_root(), 'graphs'), exist_ok=True)
-                output_path = os.path.join(get_project_root(), 'graphs',
-                                           f'{generate_random_filename()}.png')
-                plt.savefig(output_path)
-                logging.info(f'Schedule graph saved to {output_path}')
-
-            else:
-                plt.show()
-
-            plt.close()
-            logging.info(
-                f'Schedule graph built successfully in {round(timeit.default_timer() - start, 5)} seconds.'
-            )
         return self.__schedule
+
+    def get_graph(self, save_graph_to_file=False, width=None, height=None):
+        """
+        Generate and display or save a graph of the schedule.
+        Args:
+            save_graph_to_file: If True, save the graph to a file instead of displaying it.
+            width: Width of the graph figure.
+            height: Height of the graph figure.
+        """
+        logging.info(f'Building the schedule graph...')
+        start = timeit.default_timer()
+        g = self.__problem.precedence_graph.copy()
+        for i in range(self.__problem.number_of_activities):
+            nx.relabel_nodes(g, {i: f'{i}({self.get_schedule()[i]})'}, copy=False)
+
+        if width is not None and height is not None:
+            plt.figure(figsize=(width, height))
+        else:
+            plt.figure(figsize=(15, 15))
+        pos = graphviz_layout(g, prog='dot')
+        nx.draw_networkx(g, pos)
+        edge_labels = nx.get_edge_attributes(g, 'weight')
+        nx.draw_networkx_edge_labels(g, pos, edge_labels=edge_labels)
+
+        if save_graph_to_file:
+            os.makedirs(os.path.join(get_project_root(), 'graphs'), exist_ok=True)
+            output_path = os.path.join(get_project_root(), 'graphs',
+                                       f'{generate_random_filename()}.png')
+            plt.savefig(output_path)
+            logging.info(f'Schedule graph saved to {output_path}')
+
+        else:
+            plt.show()
+
+        plt.close()
+        logging.info(
+            f'Schedule graph built successfully in {round(timeit.default_timer() - start, 5)} seconds.'
+        )
 
     def __start_time_for_first_activity(self):
         self.__solver.add_clause([self.__start[(0, 0)]])

@@ -13,27 +13,27 @@ import timeit
 import pandas as pd
 import psutil
 
-from src.solver import RCPSPSolver, Problem
+from src.rcpsp_solver import RCPSPSolver, RCPSPProblem
 
 
-def process_instance(file_path: str, input_format: str, lower_bound: int = None,
+def process_instance(file_path: str, lower_bound: int = None,
                      upper_bound: int = None, time_limit: int = None,
                      queue: multiprocessing.Queue = None):
     """
     Process a single instance of the given path.
     """
-    s = RCPSPSolver(Problem(file_path, input_format), lower_bound, upper_bound)
+    s = RCPSPSolver(RCPSPProblem(file_path), lower_bound, upper_bound)
     s.encode()
     s.solve(time_limit, find_optimal=True)
     s.verify()
     queue.put(s.get_statistics())
 
 def worker(args):
-    file_path, input_format, lower_bound, upper_bound, time_limit = args
+    file_path, lower_bound, upper_bound, time_limit = args
 
     queue = multiprocessing.Queue()
     p = multiprocessing.Process(target=process_instance, args=(
-        file_path, input_format, lower_bound, upper_bound, time_limit, queue))
+        file_path, lower_bound, upper_bound, time_limit, queue))
     p.start()
 
     peak_memory = 0
@@ -102,7 +102,7 @@ def benchmark(data_set_name: str, time_limit: int = None, continue_from: str = N
     if continue_from is None:
         dataset_stats = pd.DataFrame(columns=[
             'name', 'lower_bound', 'upper_bound', 'variables', 'clauses',
-            'hard_clauses', 'soft_clauses', 'status', 'makespan',
+            'status', 'makespan',
             'encoding_time', 'total_solving_time', 'memory_usage'
         ])
     else:
@@ -116,7 +116,6 @@ def benchmark(data_set_name: str, time_limit: int = None, continue_from: str = N
 
         tasks.append((
             f'./data_set/{data_set_name}/{row.name}',
-            'psplib' if data_set_name not in ['pack', 'pack_d'] else 'pack',
             row.lower_bound,
             row.upper_bound,
             time_limit

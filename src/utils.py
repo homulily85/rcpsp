@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 import os.path
@@ -66,7 +67,24 @@ def create_eprime_file(pbs: list[tuple[list[int], list[int], int]]) -> str:
 
     return file_path
 
+def __setup_logging():
+    project_root = str(get_project_root())
+    if not os.path.exists(project_root + '/log'):
+        os.makedirs(project_root + '/log')
+    filename = f'{project_root}/log/{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}'.replace(
+        ':', '-') + '.log'
+    with open(filename, 'w'):
+        pass
 
+    logging.basicConfig(
+        filename=filename,
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+    )
+
+
+__setup_logging()
 
 class SOLVER_STATUS(Enum):
     """

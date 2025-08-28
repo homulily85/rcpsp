@@ -64,7 +64,7 @@ class RCPSPProblem:
     @property
     def file_path(self) -> str:
         """
-        Get the file path of the problem instance.
+        Return the file path of the problem instance.
 
         Returns:
             str: The file path of the problem instance.
@@ -74,7 +74,7 @@ class RCPSPProblem:
     @property
     def capacities(self) -> list[int]:
         """
-        Get the capacities of the resources.
+        Return the capacities of the resources.
 
         Returns:
             list[int]: List of capacities for each resource.
@@ -84,7 +84,7 @@ class RCPSPProblem:
     @property
     def number_of_activities(self) -> int:
         """
-        Get the number of activities in the problem instance.
+        Return the number of activities in the problem instance.
 
         Returns:
             int: Number of activities (including dummy start and end activities).
@@ -94,7 +94,7 @@ class RCPSPProblem:
     @property
     def number_of_resources(self) -> int:
         """
-        Get the number of resources in the problem instance.
+        Return the number of resources in the problem instance.
 
         Returns:
             int: Number of renewable resources.
@@ -104,7 +104,7 @@ class RCPSPProblem:
     @property
     def requests(self) -> list[list[int]]:
         """
-        Get the resource requests for each activity.
+        Return the resource requests for each activity.
 
         Returns:
             list[list[int]]: List of resource requests for each activity.
@@ -115,7 +115,7 @@ class RCPSPProblem:
     @property
     def precedence_graph(self) -> nx.DiGraph:
         """
-        Get the precedence graph of the problem instance.
+        Return the precedence graph of the problem instance.
 
         Returns:
             nx.DiGraph: The directed graph representing the precedence relations between activities.
@@ -125,7 +125,7 @@ class RCPSPProblem:
     @property
     def durations(self) -> list[int]:
         """
-        Get the durations of each activity.
+        Return the durations of each activity.
 
         Returns:
             list[int]: List of durations for each activity (including dummy start and end activities).

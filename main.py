@@ -115,7 +115,7 @@ def benchmark(data_set_name: str, time_limit: int = None, continue_from: str = N
             continue
 
         tasks.append((
-            f'./data_set/{data_set_name}/{row.name}',
+            f'./data_set/rcpsp/{data_set_name}/{row.name}',
             row.lower_bound,
             row.upper_bound,
             time_limit

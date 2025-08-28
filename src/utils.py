@@ -67,6 +67,7 @@ def create_eprime_file(pbs: list[tuple[list[int], list[int], int]]) -> str:
     return file_path
 
 
+
 class SOLVER_STATUS(Enum):
     """
     Enum to represent the status of the solver.
@@ -227,6 +228,31 @@ class SATSolver:
             "total_solving_time": round(self.__solver.time_accum(), 5),
             "number_of_calls": self.__number_of_calls
         }
+
+    def add_at_most_k(self, literals: list[int], weights: list[int], k: int):
+        """
+        Add a weighted at most k constraint to the SAT solver.
+        :param literals: List of literals involved in the constraint.
+        :param weights: List of weights corresponding to each literal.
+        :param k: The bound for the weighted at most k constraint.
+        """
+        cnf = PBEnc.leq(lits=literals, weights=weights, bound=k,
+                        top_id=self.__number_of_variables, encoding=EncType.bdd).clauses
+
+        if not cnf:
+            return
+
+        new_variable_max_index = -1
+        for clause in cnf:
+            for var in clause:
+                if abs(var) > new_variable_max_index:
+                    new_variable_max_index = abs(var)
+        if new_variable_max_index == -1:
+            return
+
+        self.__number_of_variables = max(new_variable_max_index, self.__number_of_variables)
+        for clause in cnf:
+            self.__temp_clauses.add(tuple(sorted(clause)))
 
     def __parse_eprime_file(self, file_path: str):
         literals_mapping = {}

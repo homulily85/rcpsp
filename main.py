@@ -71,7 +71,7 @@ def benchmark(data_set_name: str, time_limit: int = None, continue_from: str = N
     logging.info(f"Benchmarking dataset: {data_set_name}")
     start_time = timeit.default_timer()
 
-    bound = pd.read_csv(f'./bound/bound_{data_set_name}.csv')
+    bound = pd.read_csv(f'./bound/rcpsp/bound_{data_set_name}.csv')
 
     # Optional filtering using custom_key
     if start is not None or end is not None:

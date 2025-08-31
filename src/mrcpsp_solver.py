@@ -43,7 +43,7 @@ class MRCPSPProblem:
         self.__renewable_resources_capacities = None
         self.__non_renewable_resources_capacities = None
 
-        self.__sm_parse(file_path)
+        self.__mm_parse(file_path)
 
         logging.info(
             f"Finished parsing the problem instance from {file_path}")
@@ -156,7 +156,7 @@ class MRCPSPProblem:
         """
         return self.__non_renewable_resources_capacities
 
-    def __sm_parse(self, file_path):
+    def __mm_parse(self, file_path):
         """
         Parse the problem instance from a .mm file.
         """

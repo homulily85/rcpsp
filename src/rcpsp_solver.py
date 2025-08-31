@@ -11,7 +11,6 @@ import networkx as nx
 from matplotlib import pyplot as plt
 from networkx.algorithms.dag import transitive_closure_dag
 from networkx.algorithms.shortest_paths.dense import floyd_warshall
-from networkx.drawing.nx_pydot import graphviz_layout
 from psplib import parse
 
 from src.minium_path_cover import minimum_path_cover
@@ -240,6 +239,11 @@ class RCPSPSolver:
         """
         self.__makespan_var = None
         self.__register = {}
+
+        if not isinstance(problem, RCPSPProblem):
+            logging.critical("The problem must be an instance of RCPSPProblem.")
+            raise ValueError("The problem must be an instance of RCPSPProblem.")
+
         self.__problem = problem
 
         if lower_bound is not None and upper_bound is not None:
@@ -640,11 +644,10 @@ class RCPSPSolver:
     def get_schedule(self) -> list[int] | None:
         """
         Retrieve the schedule after solving the problem instance.
-        Args:
-            get_graph (bool, optional): If True, generate a graph of the schedule. Defaults to False.
 
         Returns:
-            list[int] | None: The schedule as a list of start times for each activity, or None if the problem is unsatisfiable or unknown.
+            list[int] | None: The schedule as a list of start times for each activity,
+            or None if the problem is unsatisfiable or unknown.
         """
         if self.__status in [SOLVER_STATUS.UNSATISFIABLE, SOLVER_STATUS.UNKNOWN]:
             return None
@@ -687,36 +690,87 @@ class RCPSPSolver:
 
         return self.__schedule
 
-    def get_graph(self, save_graph_to_file=False, width=None, height=None):
+    def get_makespan(self) -> int | None:
         """
-        Generate and display or save a graph of the schedule.
+        Retrieve the makespan after solving the problem instance.
+
+        Returns:
+            int | None: The makespan of the schedule, or None if the problem is unsatisfiable or unknown.
+        """
+        if self.__status in [SOLVER_STATUS.UNSATISFIABLE, SOLVER_STATUS.UNKNOWN]:
+            return None
+
+        return self.get_schedule()[-1]
+
+    def get_graph(self, save_to_a_file=False, width=None, height=None):
+        """
+        Generate and display or save a tree-like graph of the schedule.
         Args:
-            save_graph_to_file: If True, save the graph to a file instead of displaying it.
+            save_to_a_file: If True, save the graph to a file instead of displaying it.
             width: Width of the graph figure.
             height: Height of the graph figure.
         """
         logging.info(f'Building the schedule graph...')
         start = timeit.default_timer()
+
         g = self.__problem.precedence_graph.copy()
-        for i in range(self.__problem.number_of_activities):
-            nx.relabel_nodes(g, {i: f'{i}({self.get_schedule()[i]})'}, copy=False)
+        schedule = self.get_schedule()
 
-        if width is not None and height is not None:
-            plt.figure(figsize=(width, height))
-        else:
-            plt.figure(figsize=(15, 15))
-        pos = graphviz_layout(g, prog='dot')
-        nx.draw_networkx(g, pos)
-        edge_labels = nx.get_edge_attributes(g, 'weight')
-        nx.draw_networkx_edge_labels(g, pos, edge_labels=edge_labels)
+        # ---- Dynamically determine figure size ----
+        try:
+            levels = nx.algorithms.dag_longest_path_length(g) + 1
+        except nx.NetworkXUnfeasible:
+            levels = int(len(g.nodes) ** 0.5)  # fallback if not a DAG
 
-        if save_graph_to_file:
+        # Estimate width as max branching factor
+        level_count = {}
+        for node in nx.topological_sort(g):
+            depth = len(nx.ancestors(g, node))
+            level_count[depth] = level_count.get(depth, 0) + 1
+        max_width = max(level_count.values()) if level_count else 1
+
+        # Scale figure size (each node ~2.5x2.5 inches)
+        fig_w = (width if width else max(10, max_width * 2.5))
+        fig_h = (height if height else max(8, levels * 2.5))
+        plt.figure(figsize=(fig_w, fig_h))
+
+        # ---- Layout (tree-like with spacing tweaks) ----
+        pos = nx.nx_agraph.graphviz_layout(
+            g, prog="dot", args="-Granksep=2.0 -Gnodesep=0.25"
+        )
+
+        # Draw nodes
+        node_size = 1200
+        nx.draw_networkx_nodes(
+            g, pos, node_size=node_size, node_color="lightblue", edgecolors="black"
+        )
+        nx.draw_networkx_edges(g, pos, arrows=True, arrowstyle="->", arrowsize=20)
+
+        # Node labels = index
+        nx.draw_networkx_labels(
+            g, pos, labels={i: str(i) for i in g.nodes()}, font_weight="bold"
+        )
+
+        # Edge labels (if any)
+        edge_labels = nx.get_edge_attributes(g, "weight")
+        if edge_labels:
+            nx.draw_networkx_edge_labels(g, pos, edge_labels=edge_labels, font_color="red")
+
+        # ---- Schedule labels below nodes (dynamic offset) ----
+        # offset proportional to figure height & node size
+        y_range = max(y for _, y in pos.values()) - min(y for _, y in pos.values())
+        offset = max(-0.025 * y_range, -15)  # 5% of graph height
+        schedule_labels = {i: f"S({i}) = {schedule[i]}" for i in g.nodes()}
+        offset_pos = {node: (x, y + offset) for node, (x, y) in pos.items()}
+        nx.draw_networkx_labels(g, offset_pos, labels=schedule_labels, font_color="blue")
+
+        if save_to_a_file:
             os.makedirs(os.path.join(get_project_root(), 'graphs'), exist_ok=True)
-            output_path = os.path.join(get_project_root(), 'graphs',
-                                       f'{generate_random_filename()}.png')
-            plt.savefig(output_path)
+            output_path = os.path.join(
+                get_project_root(), 'graphs', f'{generate_random_filename()}.png'
+            )
+            plt.savefig(output_path, bbox_inches="tight")
             logging.info(f'Schedule graph saved to {output_path}')
-
         else:
             plt.show()
 
@@ -736,8 +790,9 @@ class RCPSPSolver:
                 weights = []
                 for i in range(1, self.__problem.number_of_activities):
                     if t in range(self.__ES[i], self.__LC[i]) and self.__problem.requests[i][r] > 0:
-                        literals.append(self.__run[i, t])
-                        weights.append(self.__problem.requests[i][r])
+                        if self.__problem.requests[i][r] > 0:
+                            literals.append(self.__run[i, t])
+                            weights.append(self.__problem.requests[i][r])
 
                 if sum(weights) > self.__problem.capacities[r]:
                     pb_clauses.append((literals, weights, self.__problem.capacities[r]))
@@ -793,30 +848,33 @@ class RCPSPSolver:
 
     def __precedence_constraint(self):
         for predecessor in range(1, self.__problem.number_of_activities):
-            for successor in self.__problem.precedence_graph.successors(predecessor):
+            for successor in self.__extended_precedence_graph.successors(predecessor):
                 # Precedence constraint
                 for k in range(self.__ES[successor], self.__LS[successor] + 1):
-                    if k - self.__problem.durations[predecessor] + 1 >= self.__LS[predecessor] + 1:
+                    if k - self.__extended_precedence_graph[predecessor][successor].get(
+                            "weight") + 1 >= self.__LS[predecessor] + 1:
                         continue
 
                     first_half = self.__get_forward_staircase_register(successor,
                                                                        self.__ES[successor],
                                                                        k + 1)
 
-                    t = k - self.__problem.durations[predecessor] + 1
+                    t = k - self.__extended_precedence_graph[predecessor][successor].get(
+                        "weight") + 1
                     if t < self.__ES[predecessor]:
                         t = self.__ES[predecessor]
 
                     self.__solver.add_clause([-first_half, -self.__start[predecessor, t]])
-                else:
-                    for k in range(
-                            self.__LS[successor] - self.__problem.durations[predecessor] + 2,
-                            self.__LS[predecessor] + 1):
-                        self.__solver.add_clause(
-                            [-self.__get_forward_staircase_register(successor,
-                                                                    self.__ES[successor],
-                                                                    self.__LS[successor] + 1),
-                             -self.__start[predecessor, k]])
+
+                for k in range(
+                        self.__LS[successor] - self.__extended_precedence_graph[predecessor][
+                            successor].get("weight") + 2,
+                        self.__LS[predecessor] + 1):
+                    self.__solver.add_clause(
+                        [-self.__get_forward_staircase_register(successor,
+                                                                self.__ES[successor],
+                                                                self.__LS[successor] + 1),
+                         -self.__start[predecessor, k]])
 
     def __get_forward_staircase_register(self, job: int, start: int, end: int) -> int | None:
         """Get forward staircase register for a job for a range of time [start, end)"""
@@ -923,8 +981,6 @@ class RCPSPSolver:
                 - total_solving_time: The total time taken to solve the problem.
         """
         t = self.__solver.get_statistics()
-        self.get_schedule()
-
         return {
             'file_path': self.__problem.file_path,
             'lower_bound': self.__lower_bound,
@@ -932,7 +988,7 @@ class RCPSPSolver:
             'variables': t['variables'],
             'clauses': t['clauses'],
             'status': self.__status.name,
-            'makespan': self.__schedule[-1] if self.__schedule is not None else None,
+            'makespan': self.get_makespan(),
             'preprocessing_time': self.__preprocessing_time,
             'encoding_time': self.__encoding_time,
             'total_solving_time': t['total_solving_time'],
@@ -941,6 +997,6 @@ class RCPSPSolver:
     def clear_interrupt(self):
         """
         Clear any interrupt set on the solver.
-        This method is used to reset the solver's state if it has been interrupted.
+        This method is used to reset the solver's state if it has been interrupted by a timeout.
         """
         self.__solver.clear_interrupt()

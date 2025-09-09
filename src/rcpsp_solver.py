@@ -221,6 +221,7 @@ class RCPSPProblem:
                 self.__precedence_graph.add_edge(i, successor, weight=self.__durations[i])
 
 
+# noinspection PyTypeChecker
 class RCPSPSolver:
     """
     Class to solve the Resource-Constrained Project Scheduling Problem (RCPSP) using SAT solver.
@@ -234,7 +235,7 @@ class RCPSPSolver:
             lower_bound (int, optional): The lower bound for the makespan. If None, it will be calculated.
             upper_bound (int, optional): The upper bound for the makespan. If None, it will be calculated.
         Raises:
-            ValueError: If the method is not 'sat' or 'maxsat', or if the bounds are invalid.
+            ValueError: If the problem is not an instance of RCPSPProblem or if bounds are invalid.
 
         """
         self.__makespan_var = None
@@ -580,12 +581,14 @@ class RCPSPSolver:
             return
 
         start = timeit.default_timer()
+
         self.__start_time_for_first_activity()
         self.__start_time_constraint()
         self.__precedence_constraint()
         self.__resource_constraints_with_pbamo()
         self.__consistency_constraint()
         self.__backpropagate_constraint()
+
         self.__encoding_time = round(timeit.default_timer() - start, 5)
 
         logging.info(f"Encoding finished in {self.__encoding_time} seconds.")
@@ -790,7 +793,6 @@ class RCPSPSolver:
                 weights = []
                 for i in range(1, self.__problem.number_of_activities):
                     if t in range(self.__ES[i], self.__LC[i]) and self.__problem.requests[i][r] > 0:
-                        if self.__problem.requests[i][r] > 0:
                             literals.append(self.__run[i, t])
                             weights.append(self.__problem.requests[i][r])
 

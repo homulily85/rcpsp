@@ -1,7 +1,8 @@
-from src.rcpsp_solver import RCPSPProblem, RCPSPSolver
+from src.rcpsp.problem import RCPSPProblem
+from src.rcpsp.solver import RCPSPSolver
 
 if __name__ == "__main__":
-    p = RCPSPProblem('data_set/rcpsp/pack/Pack001.rcp')
+    p = RCPSPProblem.from_file('data_set/rcpsp/pack/Pack001.rcp')
     # p = RCPSPProblem('data_set/rcpsp/pack_d/Pack_d001.rcp')
     # p = RCPSPProblem('data_set/rcpsp/test/test_2022.sm')
     # p = RCPSPProblem('data_set/rcpsp/j30.sm/j302_10.sm')

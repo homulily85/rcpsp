@@ -1,243 +1,36 @@
 import logging
 import math
 import os
+import random
+import sys
 import timeit
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from queue import Queue
 
 import networkx as nx
 from matplotlib import pyplot as plt
 from networkx.algorithms.dag import transitive_closure_dag
 from networkx.algorithms.shortest_paths.dense import floyd_warshall
-from psplib import parse
 
-from src.minium_path_cover import minimum_path_cover
-from src.utils import SATSolver, SOLVER_STATUS, get_project_root, generate_random_filename
-
-
-class MRCPSPProblem:
-    """
-    Class to represent a problem instance for the MRCPSP.
-    """
-
-    def __init__(self, file_path: str):
-        """
-        Initialize the problem instance by parsing the input file.
-
-        Args:
-            file_path (str): Path to the problem instance file.
-        Raises:
-            ValueError: If the input format is not supported.
-        Notes:
-            Input file must be .mm format.
-        """
-        _, file_extension = os.path.splitext(file_path)
-        if file_extension != ".mm":
-            logging.critical('Unsupported input format. Supported formats is .mm')
-            raise ValueError('Unsupported input format. Supported formats is .mm')
-        file_path = os.path.abspath(file_path)
-        logging.info(
-            f"Parsing the problem instance from {file_path}")
-        start = timeit.default_timer()
-
-        self.__file_path = file_path
-        self.__number_of_activities = 0
-        self.__number_of_resources = 0
-        self.__number_of_renewable_resources = 0
-        self.__number_of_non_renewable_resources = 0
-        self.__durations = None
-        self.__precedence_graph = nx.DiGraph()
-        self.__renewable_resources_request = None
-        self.__non_renewable_resources_request = None
-        self.__renewable_resources_capacities = None
-        self.__non_renewable_resources_capacities = None
-
-        self.__mm_parse(file_path)
-
-        logging.info(
-            f"Finished parsing the problem instance from {file_path}")
-        logging.info(f"Parsing time: {round(timeit.default_timer() - start, 5)} seconds.")
-
-    @property
-    def number_of_modes(self):
-        """
-        Returns the number of modes for each activity.
-        Returns:
-            list[int]: A list where each element corresponds to the number of modes for the
-            corresponding activity.
-        """
-        return [len(modes) for modes in self.__durations]
-
-    @property
-    def file_path(self):
-        """
-        Returns the file path of the problem instance.
-        Returns:
-            str: The file path of the problem instance.
-        """
-        return self.__file_path
-
-    @property
-    def number_of_activities(self):
-        """
-        Returns the number of activities in the problem instance.
-        Returns:
-            int: The number of activities in the problem instance.
-        """
-        return self.__number_of_activities
-
-    @property
-    def number_of_resources(self):
-        """
-        Returns the number of resources in the problem instance.
-        Returns:
-            int: The number of resources in the problem instance.
-        """
-        return self.__number_of_resources
-
-    @property
-    def number_of_renewable_resources(self):
-        """
-        Returns the number of renewable resources in the problem instance.
-        Returns:
-            int: The number of renewable resources in the problem instance.
-        """
-        return self.__number_of_renewable_resources
-
-    @property
-    def number_of_non_renewable_resources(self):
-        """
-        Returns the number of non-renewable resources in the problem instance.
-        Returns:
-            int: The number of non-renewable resources in the problem instance.
-        """
-        return self.__number_of_non_renewable_resources
-
-    @property
-    def durations(self):
-        """
-        Returns the durations of activities in different modes.
-        Returns:
-            list[list[int]]: A list where each element is a list of durations for each mode of
-            the corresponding activity.
-        """
-        return self.__durations
-
-    @property
-    def precedence_graph(self):
-        """
-        Returns the precedence graph of the problem instance.
-        Returns:
-                nx.DiGraph: The directed graph representing the precedence relations between activities.
-        Notes:
-            Each edge's weight corresponds to the minimum duration of the predecessor activity
-            across all its modes.
-        """
-        return self.__precedence_graph
-
-    @property
-    def renewable_resources_request(self):
-        """
-        Returns the resource requests for renewable resources.
-        Returns:
-                list[list[list[int]]]: A 3D list where each element corresponds to an activity,
-                containing a list of modes, each of which contains a list of resource requests
-                for renewable resources.
-        """
-        return self.__renewable_resources_request
-
-    @property
-    def non_renewable_resources_request(self):
-        """
-        Returns the resource requests for non-renewable resources.
-        Returns:
-                list[list[list[int]]]: A 3D list where each element corresponds to an activity,
-                containing a list of modes, each of which contains a list of resource requests
-                for non-renewable resources.
-        """
-        return self.__non_renewable_resources_request
-
-    @property
-    def renewable_resources_capacities(self):
-        """
-        Returns the capacities of renewable resources.
-        Returns:
-                list[int]: A list where each element corresponds to the capacity of a renewable resource.
-        """
-        return self.__renewable_resources_capacities
-
-    @property
-    def non_renewable_resources_capacities(self):
-        """
-        Returns the capacities of non-renewable resources.
-        Returns:
-                list[int]: A list where each element corresponds to the capacity of a non-renewable resource.
-        """
-        return self.__non_renewable_resources_capacities
-
-    def __mm_parse(self, file_path):
-        """
-        Parse the problem instance from a .mm file.
-        """
-        instance = parse(file_path, instance_format="psplib")
-
-        self.__number_of_activities = instance.num_activities
-        self.__number_of_resources = instance.num_resources
-
-        for resource in instance.resources:
-            if resource.renewable:
-                self.__number_of_renewable_resources += 1
-            else:
-                self.__number_of_non_renewable_resources += 1
-
-        # Duration for each activity in each mode
-        self.__durations = [[mode.duration for mode in instance.activities[i].modes]
-                            for i in range(self.__number_of_activities)]
-
-        for i in range(self.__number_of_activities):
-            # Add successors to the precedence graph
-            for successors in instance.activities[i].successors:
-                self.__precedence_graph.add_edge(i, successors,
-                                                 weight=min(
-                                                     [instance.activities[i].modes[j].duration for j
-                                                      in range(len(instance.activities[i].modes))]))
-
-        # Request per resource, per activity, per mode for renewable resources
-        self.__renewable_resources_request = [[[mode.demands[j] for j in
-                                                range(self.__number_of_resources)
-                                                if instance.resources[j].renewable]
-                                               for mode in instance.activities[i].modes]
-                                              for i in range(self.__number_of_activities)]
-        # Request per resource, per activity, per mode for non-renewable resources
-        self.__non_renewable_resources_request = [[[mode.demands[j] for j in
-                                                    range(self.__number_of_resources)
-                                                    if not instance.resources[j].renewable]
-                                                   for mode in instance.activities[i].modes]
-                                                  for i in range(self.__number_of_activities)]
-        # Capacity for each per resource for renewable resources
-        self.__renewable_resources_capacities = [resource.capacity for resource in
-                                                 instance.resources
-                                                 if resource.renewable]
-        # Capacity for each per resource for non-renewable resources
-        self.__non_renewable_resources_capacities = [resource.capacity for resource in
-                                                     instance.resources
-                                                     if not resource.renewable]
+from src.mrcpsp.problem import MRCPSPProblem
+from src.rcpsp.problem import RCPSPProblem
+from src.utility.mics import get_project_root, generate_random_filename
+from src.utility.minium_path_cover import minimum_path_cover
+from src.utility.sat_solver import SATSolver, SOLVER_STATUS
 
 
-# noinspection PyTypeChecker
 class MRCPSPSolver:
     """
     Class to solve the Multi-mode Resource-Constrained Project Scheduling Problem (MRCPSP) using SAT.
     """
 
-    def __init__(self, problem: MRCPSPProblem, lower_bound: int, upper_bound: int):
+    def __init__(self, problem: MRCPSPProblem):
         """
         Initialize the RCPSP solver with a problem instance.
         Args:
             problem (MRCPSPProblem): The problem instance to solve.
-            lower_bound (int): The lower bound for the makespan.
-            upper_bound (int): The upper bound for the makespan.
         Raises:
-            ValueError: If the problem is not an instance of MRCPSPProblem or if the bounds are invalid.
+            ValueError: If the problem is not an instance of MRCPSPProblem
 
         """
         self.__makespan_var = None
@@ -249,17 +42,8 @@ class MRCPSPSolver:
 
         self.__problem = problem
 
-        if lower_bound is not None and upper_bound is not None:
-            if lower_bound < 0 or upper_bound < 0:
-                logging.critical("Lower and upper bounds must be non-negative integers.")
-                raise ValueError("Lower and upper bounds must be non-negative integers.")
-
-            if lower_bound > upper_bound:
-                logging.critical("Lower bound cannot be greater than upper bound.")
-                raise ValueError("Lower bound cannot be greater than upper bound.")
-
-        self.__lower_bound = lower_bound
-        self.__upper_bound = upper_bound
+        self.__lower_bound = 0
+        self.__upper_bound = self.__calculate_bound()
         self.__makespan = self.__upper_bound
         self.__failed_preprocessing = False
         self.__schedule = None
@@ -269,226 +53,297 @@ class MRCPSPSolver:
         self.__preprocessing_time = 0
         self.__preprocessing()
 
+    def __create_RCPSP_problem_from_MRCPSP(self) -> RCPSPProblem | None:
+        logging.info("Creating a RCPSP problem based on current MRCPSP problem. ")
+
+        temp_solver = SATSolver()
+        temp_mode = {}
+        for i in range(self.__problem.number_of_activities):
+            for o in range(self.__problem.number_of_modes[i]):
+                temp_mode[i, o] = temp_solver.create_new_variable()
+
+        for i in range(self.__problem.number_of_activities):
+            temp_solver.add_clause([temp_mode[i, o] for o in
+                                    range(self.__problem.number_of_modes[i])])
+            for o1 in range(self.__problem.number_of_modes[i]):
+                for o2 in range(o1 + 1, self.__problem.number_of_modes[i]):
+                    temp_solver.add_clause([-temp_mode[i, o1], -temp_mode[i, o2]])
+
+        temp_pb_clauses = []
+
+        for r in range(self.__problem.number_of_non_renewable_resources):
+            literals = []
+            weights = []
+            for i in range(1, self.__problem.number_of_activities - 1):
+                for mode in range(self.__problem.number_of_modes[i]):
+                    if self.__problem.non_renewable_resources_request[i][mode][r] > \
+                            self.__problem.non_renewable_resources_capacities[r]:
+                        temp_solver.add_clause([-temp_mode[i, mode]])
+                    else:
+                        literals.append(temp_mode[i, mode])
+                        weights.append(self.__problem.non_renewable_resources_request[i][mode][r])
+
+            if sum(weights) > self.__problem.non_renewable_resources_capacities[r]:
+                temp_pb_clauses.append(
+                    (literals, weights, self.__problem.non_renewable_resources_capacities[r]))
+
+        temp_solver.add_pb_clauses(temp_pb_clauses)
+
+        self.__failed_preprocessing = not temp_solver.solve()
+        if self.__failed_preprocessing:
+            return None
+
+        chosen_modes = [-1 for _ in range(self.__problem.number_of_activities)]
+
+        def get_mode(activity: int) -> tuple[int, int]:
+            for o in range(self.__problem.number_of_modes[activity]):
+                if temp_solver.get_last_feasible_model()[
+                    temp_mode[activity, o] - 1] > 0:
+                    return activity, o
+            raise Exception(
+                f"Mode for activity {activity} not found in the solution when calculating bound.")
+
+        max_threads = os.cpu_count()
+
+        with ThreadPoolExecutor(max_workers=max_threads) as executor:
+            # Submit all tasks
+            futures = {executor.submit(get_mode, i): i for i in
+                       range(self.__problem.number_of_activities)}
+
+            # Collect results as they complete
+            for future in as_completed(futures):
+                i, mode = future.result()
+                chosen_modes[i] = mode
+
+        return RCPSPProblem.reduce_from_mrcpsp(self.__problem,chosen_modes)
+
     def __calculate_bound(self):
-        pass
-        # logging.info(
-        #     'Calculating lower and upper bounds using the CPRU method...')
-        # start = timeit.default_timer()
-        # horizon = 30000
-        # tourn_factor = 0.5
-        # omega1 = 0.4
-        # omega2 = 0.6
-        #
-        # # Use a queue for breadth-first traversal of the precedence graph
-        # q = Queue()
-        # # Earliest feasible finish time for each job
-        # ef = [0] * self.__problem.number_of_activities
-        #
-        # q.put(0)
-        # while not q.empty():
-        #     job = q.get()
-        #     # Move finish until it is feasible considering resource constraints
-        #     feasible_final = False
-        #     while not feasible_final:
-        #         feasible = True
-        #         for k in range(self.__problem.number_of_resources):
-        #             # In Python version, requests are not time-dependent
-        #             if self.__problem.requests[job][k] > self.__problem.capacities[k]:
-        #                 feasible = False
-        #                 ef[job] += 1
-        #         if feasible:
-        #             feasible_final = True
-        #         if ef[job] > horizon:
-        #             return 0, horizon
-        #
-        #     # Update finish times, and enqueue successors
-        #     for successor in self.__problem.precedence_graph.successors(job):
-        #         f = ef[job] + self.__problem.durations[successor]
-        #         if f > ef[successor]:
-        #             # Use maximum values, because we are interested in critical paths
-        #             ef[successor] = f
-        #         q.put(successor)  # Enqueue successor
-        #
-        # # Latest feasible start time for each job
-        # ls = [horizon] * self.__problem.number_of_activities
-        # q.put(self.__problem.number_of_activities - 1)
-        #
-        # while not q.empty():
-        #     job = q.get()
-        #     # Move start until it is feasible considering resource constraints
-        #     feasible_final = False
-        #     while not feasible_final:
-        #         feasible = True
-        #         for k in range(self.__problem.number_of_resources):
-        #             # In Python version, requests are not time-dependent
-        #             if self.__problem.requests[job][k] > self.__problem.capacities[k]:
-        #                 feasible = False
-        #                 ls[job] -= 1
-        #         if feasible:
-        #             feasible_final = True
-        #         if ls[job] < 0:
-        #             return ef[-1], horizon
-        #
-        #     # Update start times, and enqueue predecessors
-        #     for predecessor in self.__problem.precedence_graph.predecessors(job):
-        #         s = ls[job] - self.__problem.durations[predecessor]
-        #         if s < ls[predecessor]:
-        #             ls[predecessor] = s  # Use minimum values for determining critical paths
-        #         q.put(predecessor)  # Enqueue predecessor
-        #
-        # # Check if any time window is too small: lf[i]-es[i]<durations[i]
-        # for i in range(self.__problem.number_of_activities):
-        #     if (ls[i] + self.__problem.durations[i]) - (ef[i] - self.__problem.durations[i]) < \
-        #             self.__problem.durations[i]:
-        #         return ef[-1], horizon
-        #
-        # # Calculate extended resource utilization values
-        # ru = [0.0] * self.__problem.number_of_activities
-        # q.put(self.__problem.number_of_activities - 1)  # Enqueue sink job
-        #
-        # def get_iterator_size(iterator):
-        #     return sum(1 for _ in iterator)
-        #
-        # while not q.empty():
-        #     job = q.get()
-        #     duration = self.__problem.durations[job]
-        #     demand = 0
-        #     availability = 0
-        #
-        #     for k in range(self.__problem.number_of_resources):
-        #         demand += self.__problem.requests[job][k]
-        #         # Simple calculation for availability
-        #         availability += self.__problem.capacities[k] * (
-        #                 ls[job] + duration - (ef[job] - duration))
-        #
-        #     ru[job] = omega1 * ((get_iterator_size(self.__problem.precedence_graph.successors(
-        #         job)) / self.__problem.number_of_resources) * (
-        #                             demand / availability if availability > 0 else 0))
-        #
-        #     for successor in self.__problem.precedence_graph.successors(job):
-        #         ru[job] += omega2 * ru[successor]
-        #
-        #     if math.isnan(ru[job]) or ru[job] < 0.0:
-        #         ru[job] = 0.0  # Prevent errors from strange values here
-        #
-        #     # Enqueue predecessors
-        #     for predecessor in self.__problem.precedence_graph.predecessors(job):
-        #         q.put(predecessor)
-        #
-        # # Calculate the CPRU (critical path and resource utilization) priority value for each activity
-        # cpru = [0.0] * self.__problem.number_of_activities
-        # for job in range(self.__problem.number_of_activities):
-        #     cp = horizon - ls[job]  # Critical path length
-        #     cpru[job] = cp * ru[job]
-        #
-        # # Use fixed seed for deterministic bounds
-        # random.seed(42)
-        #
-        # # Run a number of passes ('tournaments')
-        # [self.__problem.capacities.copy() for _ in range(horizon)]
-        # schedule = [-1] * self.__problem.number_of_activities  # Finish time for each process
-        # schedule[0] = 0  # Schedule the starting dummy activity
-        #
-        # best_makespan = sys.maxsize // 2
-        #
-        # # Number of passes scales with number of jobs
-        # for _ in range((self.__problem.number_of_activities - 2) * 5):
-        #     for i in range(1, self.__problem.number_of_activities):
-        #         schedule[i] = -1
-        #
-        #     # Initialize remaining resource availabilities for all-time points
-        #     available = [[self.__problem.capacities[k] for _ in range(horizon)] for k in
-        #                  range(self.__problem.number_of_resources)]
-        #
-        #     # Schedule the starting dummy activity
-        #     schedule[0] = 0
-        #
-        #     # Schedule all remaining jobs
-        #     for i in range(1, self.__problem.number_of_activities):
-        #         # Randomly select a fraction of the eligible activities (with replacement)
-        #         eligible = []
-        #         for j in range(1, self.__problem.number_of_activities):
-        #             if schedule[j] >= 0:
-        #                 continue
-        #
-        #             predecessors_scheduled = True
-        #             for predecessor in self.__problem.precedence_graph.predecessors(j):
-        #                 if schedule[predecessor] < 0:
-        #                     predecessors_scheduled = False
-        #
-        #             if predecessors_scheduled:
-        #                 eligible.append(j)
-        #
-        #         if not eligible:
-        #             break
-        #
-        #         z = max(int(tourn_factor * len(eligible)), 2)
-        #         selected = []
-        #
-        #         for _ in range(z):
-        #             choice = int(random.random() * len(eligible))
-        #             selected.append(eligible[choice])
-        #
-        #         # Select the activity with the best priority value
-        #         winner = -1
-        #         best_priority = -sys.float_info.max / 2.0
-        #
-        #         for sjob in selected:
-        #             if cpru[sjob] >= best_priority:
-        #                 best_priority = cpru[sjob]
-        #                 winner = sjob
-        #
-        #         # Schedule it as early as possible
-        #         finish = -1
-        #         for predecessor in self.__problem.precedence_graph.predecessors(winner):
-        #             new_finish = schedule[predecessor] + self.__problem.durations[winner]
-        #             if new_finish > finish:
-        #                 finish = new_finish
-        #
-        #         duration = self.__problem.durations[winner]
-        #         feasible_final = False
-        #
-        #         while not feasible_final:
-        #             feasible = True
-        #             for k in range(self.__problem.number_of_resources):
-        #                 for t in range(finish - duration, finish):
-        #                     if t < 0 or t >= horizon:
-        #                         continue
-        #                     # Check if enough resources are available at time t
-        #                     if self.__problem.requests[winner][k] > available[k][t]:
-        #                         feasible = False
-        #                         finish += 1
-        #                         break
-        #
-        #             if feasible:
-        #                 feasible_final = True
-        #             if finish > horizon:
-        #                 feasible_final = False
-        #                 break
-        #
-        #         if not feasible_final:
-        #             break  # Skip the rest of this pass
-        #
-        #         schedule[winner] = finish
-        #
-        #         # Update remaining resource availabilities
-        #         for k in range(self.__problem.number_of_resources):
-        #             for t in range(finish - duration, finish):
-        #                 if t < 0 or t >= horizon:
-        #                     continue
-        #                 available[k][t] -= self.__problem.requests[winner][k]
-        #
-        #     if 0 <= schedule[-1] < best_makespan:
-        #         best_makespan = schedule[-1]
-        #
-        # logging.info(
-        #     f"Finished calculating lower and upper bounds in {round(timeit.default_timer() - start, 5)} seconds."
-        # )
-        # # For the lower bound we use the earliest start of end dummy activity
-        # return ef[-1], min(horizon, best_makespan)
+        rcpsp_problem = self.__create_RCPSP_problem_from_MRCPSP()
+
+        if rcpsp_problem is None:
+            return 0
+
+        logging.info(
+            'Calculating lower and upper bounds using the CPRU method...')
+        start = timeit.default_timer()
+        horizon = 30000
+        tourn_factor = 0.5
+        omega1 = 0.4
+        omega2 = 0.6
+
+        # Use a queue for breadth-first traversal of the precedence graph
+        q = Queue()
+        # Earliest feasible finish time for each job
+        ef = [0] * rcpsp_problem.number_of_activities
+
+        q.put(0)
+        while not q.empty():
+            job = q.get()
+            # Move finish until it is feasible considering resource constraints
+            feasible_final = False
+            while not feasible_final:
+                feasible = True
+                for k in range(rcpsp_problem.number_of_resources):
+                    # In Python version, requests are not time-dependent
+                    if rcpsp_problem.requests[job][k] > rcpsp_problem.capacities[k]:
+                        feasible = False
+                        ef[job] += 1
+                if feasible:
+                    feasible_final = True
+                if ef[job] > horizon:
+                    return horizon
+
+            # Update finish times, and enqueue successors
+            for successor in rcpsp_problem.precedence_graph.successors(job):
+                f = ef[job] + rcpsp_problem.durations[successor]
+                if f > ef[successor]:
+                    # Use maximum values, because we are interested in critical paths
+                    ef[successor] = f
+                q.put(successor)  # Enqueue successor
+
+        # Latest feasible start time for each job
+        ls = [horizon] * rcpsp_problem.number_of_activities
+        q.put(rcpsp_problem.number_of_activities - 1)
+
+        while not q.empty():
+            job = q.get()
+            # Move start until it is feasible considering resource constraints
+            feasible_final = False
+            while not feasible_final:
+                feasible = True
+                for k in range(rcpsp_problem.number_of_resources):
+                    # In Python version, requests are not time-dependent
+                    if rcpsp_problem.requests[job][k] > rcpsp_problem.capacities[k]:
+                        feasible = False
+                        ls[job] -= 1
+                if feasible:
+                    feasible_final = True
+                if ls[job] < 0:
+                    return horizon
+
+            # Update start times, and enqueue predecessors
+            for predecessor in rcpsp_problem.precedence_graph.predecessors(job):
+                s = ls[job] - rcpsp_problem.durations[predecessor]
+                if s < ls[predecessor]:
+                    ls[predecessor] = s  # Use minimum values for determining critical paths
+                q.put(predecessor)  # Enqueue predecessor
+
+        # Check if any time window is too small: lf[i]-es[i]<durations[i]
+        for i in range(rcpsp_problem.number_of_activities):
+            if (ls[i] + rcpsp_problem.durations[i]) - (ef[i] - rcpsp_problem.durations[i]) < \
+                    rcpsp_problem.durations[i]:
+                return horizon
+
+        # Calculate extended resource utilization values
+        ru = [0.0] * rcpsp_problem.number_of_activities
+        q.put(rcpsp_problem.number_of_activities - 1)  # Enqueue sink job
+
+        def get_iterator_size(iterator):
+            return sum(1 for _ in iterator)
+
+        while not q.empty():
+            job = q.get()
+            duration = rcpsp_problem.durations[job]
+            demand = 0
+            availability = 0
+
+            for k in range(rcpsp_problem.number_of_resources):
+                demand += rcpsp_problem.requests[job][k]
+                # Simple calculation for availability
+                availability += rcpsp_problem.capacities[k] * (
+                        ls[job] + duration - (ef[job] - duration))
+
+            ru[job] = omega1 * ((get_iterator_size(rcpsp_problem.precedence_graph.successors(
+                job)) / rcpsp_problem.number_of_resources) * (
+                                    demand / availability if availability > 0 else 0))
+
+            for successor in rcpsp_problem.precedence_graph.successors(job):
+                ru[job] += omega2 * ru[successor]
+
+            if math.isnan(ru[job]) or ru[job] < 0.0:
+                ru[job] = 0.0  # Prevent errors from strange values here
+
+            # Enqueue predecessors
+            for predecessor in rcpsp_problem.precedence_graph.predecessors(job):
+                q.put(predecessor)
+
+        # Calculate the CPRU (critical path and resource utilization) priority value for each activity
+        cpru = [0.0] * rcpsp_problem.number_of_activities
+        for job in range(rcpsp_problem.number_of_activities):
+            cp = horizon - ls[job]  # Critical path length
+            cpru[job] = cp * ru[job]
+
+        # Use fixed seed for deterministic bounds
+        random.seed(42)
+
+        # Run a number of passes ('tournaments')
+        [rcpsp_problem.capacities.copy() for _ in range(horizon)]
+        schedule = [-1] * rcpsp_problem.number_of_activities  # Finish time for each process
+        schedule[0] = 0  # Schedule the starting dummy activity
+
+        best_makespan = sys.maxsize // 2
+
+        # Number of passes scales with number of jobs
+        for _ in range((rcpsp_problem.number_of_activities - 2) * 5):
+            for i in range(1, rcpsp_problem.number_of_activities):
+                schedule[i] = -1
+
+            # Initialize remaining resource availabilities for all-time points
+            available = [[rcpsp_problem.capacities[k] for _ in range(horizon)] for k in
+                         range(rcpsp_problem.number_of_resources)]
+
+            # Schedule the starting dummy activity
+            schedule[0] = 0
+
+            # Schedule all remaining jobs
+            for i in range(1, rcpsp_problem.number_of_activities):
+                # Randomly select a fraction of the eligible activities (with replacement)
+                eligible = []
+                for j in range(1, rcpsp_problem.number_of_activities):
+                    if schedule[j] >= 0:
+                        continue
+
+                    predecessors_scheduled = True
+                    for predecessor in rcpsp_problem.precedence_graph.predecessors(j):
+                        if schedule[predecessor] < 0:
+                            predecessors_scheduled = False
+
+                    if predecessors_scheduled:
+                        eligible.append(j)
+
+                if not eligible:
+                    break
+
+                z = max(int(tourn_factor * len(eligible)), 2)
+                selected = []
+
+                for _ in range(z):
+                    choice = int(random.random() * len(eligible))
+                    selected.append(eligible[choice])
+
+                # Select the activity with the best priority value
+                winner = -1
+                best_priority = -sys.float_info.max / 2.0
+
+                for sjob in selected:
+                    if cpru[sjob] >= best_priority:
+                        best_priority = cpru[sjob]
+                        winner = sjob
+
+                # Schedule it as early as possible
+                finish = -1
+                for predecessor in rcpsp_problem.precedence_graph.predecessors(winner):
+                    new_finish = schedule[predecessor] + rcpsp_problem.durations[winner]
+                    if new_finish > finish:
+                        finish = new_finish
+
+                duration = rcpsp_problem.durations[winner]
+                feasible_final = False
+
+                while not feasible_final:
+                    feasible = True
+                    for k in range(rcpsp_problem.number_of_resources):
+                        for t in range(finish - duration, finish):
+                            if t < 0 or t >= horizon:
+                                continue
+                            # Check if enough resources are available at time t
+                            if rcpsp_problem.requests[winner][k] > available[k][t]:
+                                feasible = False
+                                finish += 1
+                                break
+
+                    if feasible:
+                        feasible_final = True
+                    if finish > horizon:
+                        feasible_final = False
+                        break
+
+                if not feasible_final:
+                    break  # Skip the rest of this pass
+
+                schedule[winner] = finish
+
+                # Update remaining resource availabilities
+                for k in range(rcpsp_problem.number_of_resources):
+                    for t in range(finish - duration, finish):
+                        if t < 0 or t >= horizon:
+                            continue
+                        available[k][t] -= rcpsp_problem.requests[winner][k]
+
+            if 0 <= schedule[-1] < best_makespan:
+                best_makespan = schedule[-1]
+
+        logging.info(
+            f"Finished calculating lower and upper bounds in {round(timeit.default_timer() - start, 5)} seconds."
+        )
+        # For the lower bound we use the earliest start of end dummy activity
+        return min(horizon, best_makespan)
 
     def __preprocessing(self):
         logging.info('Preprocessing started...')
+
+        self.__problem.reduce_non_renewable_resources_request_and_capacity()
+
         logging.info('Creating the extended precedence graph...')
         start = timeit.default_timer()
         self.__extended_precedence_graph = transitive_closure_dag(self.__problem.precedence_graph)
@@ -540,6 +395,8 @@ class MRCPSPSolver:
             )
             self.__failed_preprocessing = True
             return
+
+        self.__lower_bound = self.__ES[-1]
 
         self.__start = {}
         self.__run = {}
@@ -828,10 +685,10 @@ class MRCPSPSolver:
                     self.__solver.add_clause([-first_half, -self.__start[predecessor, t]])
 
                 for k in range(max(self.__ES[predecessor],
-                        self.__LS[successor] - self.__extended_precedence_graph[predecessor][
-                            successor].get("weight") + 2),
-                        self.__LS[predecessor] + 1):
-
+                                   self.__LS[successor] -
+                                   self.__extended_precedence_graph[predecessor][
+                                       successor].get("weight") + 2),
+                               self.__LS[predecessor] + 1):
                     self.__solver.add_clause(
                         [-self.__get_forward_staircase_register(successor,
                                                                 self.__ES[successor],
@@ -859,8 +716,9 @@ class MRCPSPSolver:
                                                   -self.__start[predecessor, t]])
 
                     for k in range(max(self.__ES[predecessor],
-                            self.__LS[successor] - self.__problem.durations[predecessor][mode] + 2),
-                            self.__LS[predecessor] + 1):
+                                       self.__LS[successor] - self.__problem.durations[predecessor][
+                                           mode] + 2),
+                                   self.__LS[predecessor] + 1):
                         self.__solver.add_clause(
                             [-self.__mode[predecessor, mode],
                              -self.__get_forward_staircase_register(successor,
@@ -884,7 +742,6 @@ class MRCPSPSolver:
             self.__solver.add_clause(
                 [self.__get_forward_staircase_register(i, self.__ES[i], self.__LS[i] + 1)])
 
-
     def __resource_constraints_with_pbamo(self):
         pb_clauses = []
         for t in range(self.__upper_bound):
@@ -895,11 +752,13 @@ class MRCPSPSolver:
                     for mode in range(self.__problem.number_of_modes[i]):
                         if t in range(self.__ES[i], self.__LC[i]) and \
                                 self.__problem.renewable_resources_request[i][mode][r] > 0:
-                            if self.__problem.renewable_resources_request[i][mode][r] > self.__problem.renewable_resources_capacities[r]:
-                                self.__solver   .add_clause([-self.__run[i, t, mode]])
+                            if self.__problem.renewable_resources_request[i][mode][r] > \
+                                    self.__problem.renewable_resources_capacities[r]:
+                                self.__solver.add_clause([-self.__run[i, t, mode]])
                             else:
                                 literals.append(self.__run[i, t, mode])
-                                weights.append(self.__problem.renewable_resources_request[i][mode][r])
+                                weights.append(
+                                    self.__problem.renewable_resources_request[i][mode][r])
 
                     if sum(weights) > self.__problem.renewable_resources_capacities[r]:
                         pb_clauses.append(
@@ -944,7 +803,8 @@ class MRCPSPSolver:
             weights = []
             for i in range(1, self.__problem.number_of_activities - 1):
                 for mode in range(self.__problem.number_of_modes[i]):
-                    if self.__problem.non_renewable_resources_request[i][mode][r]> self.__problem.non_renewable_resources_capacities[r]:
+                    if self.__problem.non_renewable_resources_request[i][mode][r] > \
+                            self.__problem.non_renewable_resources_capacities[r]:
                         self.__solver.add_clause([-self.__mode[i, mode]])
                     else:
                         literals.append(self.__mode[i, mode])
@@ -1076,7 +936,14 @@ class MRCPSPSolver:
                 - encoding_time: The time taken for encoding the problem.
                 - total_solving_time: The total time taken to solve the problem.
         """
-        t = self.__solver.get_statistics()
+        if not self.__failed_preprocessing:
+            t = self.__solver.get_statistics()
+        else:
+            t = {
+                'variables': 0,
+                'clauses': 0,
+                'total_solving_time': 0,
+            }
         return {
             'file_path': self.__problem.file_path,
             'lower_bound': self.__lower_bound,

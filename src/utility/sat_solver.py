@@ -3,69 +3,16 @@ import logging
 import os
 import os.path
 import re
-import secrets
-import string
 import subprocess
 import timeit
 from enum import Enum, auto
-from pathlib import Path
 from threading import Timer
 from typing import Iterable
 
-from pysat.pb import PBEnc, EncType
 from pysat.solvers import Glucose4
 
+from src.utility.mics import get_project_root, generate_random_filename
 
-def generate_random_filename() -> str:
-    """Generate a random filename with 5 alphanumeric characters."""
-    characters = string.ascii_letters + string.digits
-    random_str = ''.join(secrets.choice(characters) for _ in range(5))
-    return random_str
-
-
-def get_project_root() -> Path:
-    """Get the root directory of the project."""
-    return Path(__file__).parent.parent
-
-
-def create_eprime_file(pbs: list[tuple[list[int], list[int], int]]) -> str:
-    """
-    Create an EPrime file from the given pseudo-Boolean constraints (pbs).
-    Args:
-        pbs (list[tuple[list[int], list[int], int]]): A list of pseudo-Boolean constraints,
-            where each constraint is a tuple of (literals, weights, bound). Example: [([1, 2], [3, 4], 5), ([3, 4], [1, 2], 6)]
-    Returns:
-        The path to the created EPrime file.
-    """
-    os.makedirs(os.path.join(get_project_root(), 'eprime'), exist_ok=True)
-    file_path = os.path.join(get_project_root(), 'eprime', f'{generate_random_filename()}.eprime')
-
-    clauses = []
-    unique_literals = set()
-
-    for pb in pbs:
-        if len(pb[0]) == 1 and pb[1][0] == 1 and pb[2] == 1:
-            continue
-
-        if sum(pb[1]) <= pb[2]:
-            continue
-
-        unique_literals.update(pb[0])
-        clause = '+'.join(f"{w}*x{l}" for l, w in zip(pb[0], pb[1]) if w != 0)
-        if not clause:
-            continue
-
-        clause += f"<={pb[2]}"
-        clauses.append(clause)
-
-    with open(file_path, 'a+') as f:
-        f.write("language ESSENCE' 1.0\n")
-        for literal in unique_literals:
-            f.write(f"find\t x{literal}:bool\n")
-        f.write("such that\n")
-        f.write("/\\\n".join(clauses))
-
-    return file_path
 
 def __setup_logging():
     project_root = str(get_project_root())
@@ -85,6 +32,7 @@ def __setup_logging():
 
 
 __setup_logging()
+
 
 class SOLVER_STATUS(Enum):
     """
@@ -243,31 +191,6 @@ class SATSolver:
             "number_of_calls": self.__number_of_calls
         }
 
-    def add_at_most_k(self, literals: list[int], weights: list[int], k: int):
-        """
-        Add a weighted at most k constraint to the SAT solver.
-        :param literals: List of literals involved in the constraint.
-        :param weights: List of weights corresponding to each literal.
-        :param k: The bound for the weighted at most k constraint.
-        """
-        cnf = PBEnc.leq(lits=literals, weights=weights, bound=k,
-                        top_id=self.__number_of_variables, encoding=EncType.bdd).clauses
-
-        if not cnf:
-            return
-
-        new_variable_max_index = -1
-        for clause in cnf:
-            for var in clause:
-                if abs(var) > new_variable_max_index:
-                    new_variable_max_index = abs(var)
-        if new_variable_max_index == -1:
-            return
-
-        self.__number_of_variables = max(new_variable_max_index, self.__number_of_variables)
-        for clause in cnf:
-            self.__temp_clauses.add(tuple(sorted(clause)))
-
     def __parse_eprime_file(self, file_path: str):
         literals_mapping = {}
         auxiliary_mapping = {}
@@ -318,6 +241,47 @@ class SATSolver:
 
                     self.add_clause(clause)
 
+    @staticmethod
+    def create_eprime_file(pbs: list[tuple[list[int], list[int], int]]) -> str:
+        """
+        Create an EPrime file from the given pseudo-Boolean constraints (pbs).
+        Args:
+            pbs (list[tuple[list[int], list[int], int]]): A list of pseudo-Boolean constraints,
+                where each constraint is a tuple of (literals, weights, bound). Example: [([1, 2], [3, 4], 5), ([3, 4], [1, 2], 6)]
+        Returns:
+            The path to the created EPrime file.
+        """
+        os.makedirs(os.path.join(get_project_root(), 'eprime'), exist_ok=True)
+        file_path = os.path.join(get_project_root(), 'eprime',
+                                 f'{generate_random_filename()}.eprime')
+
+        clauses = []
+        unique_literals = set()
+
+        for pb in pbs:
+            if len(pb[0]) == 1 and pb[1][0] == 1 and pb[2] == 1:
+                continue
+
+            if sum(pb[1]) <= pb[2]:
+                continue
+
+            unique_literals.update(pb[0])
+            clause = '+'.join(f"{w}*x{l}" for l, w in zip(pb[0], pb[1]) if w != 0)
+            if not clause:
+                continue
+
+            clause += f"<={pb[2]}"
+            clauses.append(clause)
+
+        with open(file_path, 'a+') as f:
+            f.write("language ESSENCE' 1.0\n")
+            for literal in unique_literals:
+                f.write(f"find\t x{literal}:bool\n")
+            f.write("such that\n")
+            f.write("/\\\n".join(clauses))
+
+        return file_path
+
     def add_pb_clauses(self, pbs: list[tuple[list[int], list[int], int]]):
         """
         Add pseudo-Boolean constraints to the SAT solver.
@@ -333,7 +297,7 @@ class SATSolver:
         Returns:
 
         """
-        eprime_path = create_eprime_file(pbs)
+        eprime_path = SATSolver.create_eprime_file(pbs)
 
         os.makedirs(os.path.join(get_project_root(), 'dimacs'), exist_ok=True)
         output_file_path = os.path.join(get_project_root(), 'dimacs',

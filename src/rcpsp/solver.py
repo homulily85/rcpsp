@@ -11,214 +11,11 @@ import networkx as nx
 from matplotlib import pyplot as plt
 from networkx.algorithms.dag import transitive_closure_dag
 from networkx.algorithms.shortest_paths.dense import floyd_warshall
-from psplib import parse
 
-from src.minium_path_cover import minimum_path_cover
-from src.utils import SATSolver, SOLVER_STATUS, get_project_root, \
-    generate_random_filename
-
-
-class RCPSPProblem:
-    """
-    Class to represent a problem instance for the RCPSP.
-    """
-
-    def __init__(self, file_path: str):
-        """
-        Initialize the problem instance by parsing the input file.
-
-        Args:
-            file_path (str): Path to the problem instance file.
-        Raises:
-            ValueError: If the input format is not supported.
-        Notes:
-            Input file must be either .sm or .rcp format.
-        """
-        _, file_extension = os.path.splitext(file_path)
-        if file_extension not in ['.sm', '.rcp']:
-            logging.critical('Unsupported input format. Supported formats are: .sm, .rcp')
-            raise ValueError('Unsupported input format. Supported formats are: .sm, .rcp')
-        file_path = os.path.abspath(file_path)
-        logging.info(
-            f"Parsing the problem instance from {file_path}")
-        start = timeit.default_timer()
-
-        self.__file_path = file_path
-        self.__number_of_activities = None
-        self.__number_of_resources = None
-        self.__durations = None
-        self.__precedence_graph = nx.DiGraph()
-        self.__requests = None
-        self.__capacities = None
-
-        if file_extension == '.sm':
-            self.__sm_parse(file_path)
-        elif file_extension == '.rcp':
-            self.__rcp_parse(file_path)
-
-        logging.info(
-            f"Finished parsing the problem instance from {file_path}")
-        logging.info(f"Parsing time: {round(timeit.default_timer() - start, 5)} seconds.")
-
-    @property
-    def file_path(self) -> str:
-        """
-        Return the file path of the problem instance.
-
-        Returns:
-            str: The file path of the problem instance.
-        """
-        return self.__file_path
-
-    @property
-    def capacities(self) -> list[int]:
-        """
-        Return the capacities of the resources.
-
-        Returns:
-            list[int]: List of capacities for each resource.
-        """
-        return self.__capacities
-
-    @property
-    def number_of_activities(self) -> int:
-        """
-        Return the number of activities in the problem instance.
-
-        Returns:
-            int: Number of activities (including dummy start and end activities).
-        """
-        return self.__number_of_activities
-
-    @property
-    def number_of_resources(self) -> int:
-        """
-        Return the number of resources in the problem instance.
-
-        Returns:
-            int: Number of renewable resources.
-        """
-        return self.__number_of_resources
-
-    @property
-    def requests(self) -> list[list[int]]:
-        """
-        Return the resource requests for each activity.
-
-        Returns:
-            list[list[int]]: List of resource requests for each activity.
-            Each sublist corresponds to an activity and contains the requests for each resource.
-        """
-        return self.__requests
-
-    @property
-    def precedence_graph(self) -> nx.DiGraph:
-        """
-        Return the precedence graph of the problem instance.
-
-        Returns:
-            nx.DiGraph: The directed graph representing the precedence relations between activities.
-        """
-        return self.__precedence_graph
-
-    @property
-    def durations(self) -> list[int]:
-        """
-        Return the durations of each activity.
-
-        Returns:
-            list[int]: List of durations for each activity (including dummy start and end activities).
-        """
-        return self.__durations
-
-    def __sm_parse(self, file_path):
-        """
-        Parse the problem instance from a PSPLIB file.
-        """
-        instance = parse(file_path, instance_format="psplib")
-
-        # Number of activities (including dummy start and end activities)
-        self.__number_of_activities = instance.num_activities
-        # Number of renewable resources
-        self.__number_of_resources = instance.num_resources
-
-        # Duration for each activity
-        self.__durations = [instance.activities[i].modes[0].duration
-                            for i in range(self.__number_of_activities)]
-
-        for i in range(self.__number_of_activities):
-            # Add successors to the precedence graph
-            for successors in instance.activities[i].successors:
-                self.__precedence_graph.add_edge(i, successors,
-                                                 weight=instance.activities[i].modes[0].duration)
-
-        # Request per resource, per activity
-        self.__requests = [instance.activities[i].modes[0].demands
-                           for i in range(self.__number_of_activities)]
-        # Capacity for each per resource
-        self.__capacities = [instance.resources[i].capacity
-                             for i in range(self.__number_of_resources)]
-
-    def __rcp_parse(self, file_path):
-        """
-        Parse the problem instance from a PACK file.
-        """
-        with open(file_path, 'r') as f:
-            lines = f.readlines()
-
-        # First line: number of jobs and resources
-        line_parts = lines[0].strip().split()
-        self.__number_of_activities = int(line_parts[0])
-        self.__number_of_resources = int(line_parts[1])
-
-        # Second line: resource capacities
-        self.__capacities = list(map(int, lines[1].strip().split()))
-
-        # Initialize data structures
-        self.__durations = [0] * self.__number_of_activities
-        self.__requests = [[] for _ in range(self.__number_of_activities)]
-        successors = [[] for _ in range(self.__number_of_activities)]
-        predecessors = [[] for _ in range(self.__number_of_activities)]
-
-        # Parse activities
-        for i in range(2, len(lines)):
-            line_parts = list(map(int, lines[i].strip().split()))
-            iterator = iter(line_parts)
-            job_idx = i - 2  # Activity index (0-indexed)
-
-            # Duration is the first value
-            self.__durations[job_idx] = next(iterator)
-
-            # Resource requests are the next number_of_resources values
-            self.__requests[job_idx] = [next(iterator) for _ in range(self.__number_of_resources)]
-
-            next(iterator)  # Ignore number of successors
-
-            # Successors
-            successors[job_idx] = []
-
-            for succ in iterator:
-                successors[job_idx].append(succ - 1)
-
-        # Generate predecessors
-        for i in range(self.__number_of_activities):
-            for j in successors[i]:
-                predecessors[j].append(i)
-
-        # From the pack format, the first activity is made to be immediate predecessor of all other activities.
-        # This is not true, so we need to remove it.
-        for i in range(self.__number_of_activities):
-            if len(predecessors[i]) > 0 and predecessors[i] != [0]:
-                try:
-                    predecessors[i].remove(0)
-                    successors[0].remove(i)
-                except ValueError:
-                    pass
-
-        # Create the precedence graph
-        for i in range(self.__number_of_activities):
-            for successor in successors[i]:
-                self.__precedence_graph.add_edge(i, successor, weight=self.__durations[i])
+from src.rcpsp.problem import RCPSPProblem
+from src.utility.mics import get_project_root, generate_random_filename
+from src.utility.minium_path_cover import minimum_path_cover
+from src.utility.sat_solver import SATSolver, SOLVER_STATUS
 
 
 # noinspection PyTypeChecker
@@ -489,7 +286,7 @@ class RCPSPSolver:
             f"Finished calculating lower and upper bounds in {round(timeit.default_timer() - start, 5)} seconds."
         )
         # For the lower bound we use the earliest start of end dummy activity
-        return ef[-1], min(horizon, best_makespan)
+        return min(horizon, best_makespan)
 
     def __preprocessing(self):
         logging.info('Preprocessing started...')
@@ -793,8 +590,11 @@ class RCPSPSolver:
                 weights = []
                 for i in range(1, self.__problem.number_of_activities):
                     if t in range(self.__ES[i], self.__LC[i]) and self.__problem.requests[i][r] > 0:
-                            literals.append(self.__run[i, t])
-                            weights.append(self.__problem.requests[i][r])
+                        if self.__problem.requests[i][r]> self.__problem.capacities[r]:
+                            self.__solver.add_clause([-self.__run[i, t]])
+                            continue
+                        literals.append(self.__run[i, t])
+                        weights.append(self.__problem.requests[i][r])
 
                 if sum(weights) > self.__problem.capacities[r]:
                     pb_clauses.append((literals, weights, self.__problem.capacities[r]))

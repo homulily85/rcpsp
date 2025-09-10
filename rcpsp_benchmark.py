@@ -13,7 +13,8 @@ import timeit
 import pandas as pd
 import psutil
 
-from src.rcpsp_solver import RCPSPSolver, RCPSPProblem
+from src.rcpsp.problem import RCPSPProblem
+from src.rcpsp.solver import RCPSPSolver
 
 
 def process_instance(file_path: str, lower_bound: int = None,
@@ -22,7 +23,7 @@ def process_instance(file_path: str, lower_bound: int = None,
     """
     Process a single instance of the given path.
     """
-    s = RCPSPSolver(RCPSPProblem(file_path), lower_bound, upper_bound)
+    s = RCPSPSolver(RCPSPProblem.from_file(file_path), lower_bound, upper_bound)
     s.encode()
     s.solve(time_limit, find_optimal=True)
     s.verify()

@@ -1,5 +1,5 @@
 #!/bin/bash
 source ~/PycharmProjects/rcpsp/.venv/bin/activate
 
-python benchmark.py j30.mm --time_limit 600 --num_concurrent_processes 2
+python mrcpsp_benchmark.py j30.mm --time_limit 600 --num_concurrent_processes 2
 

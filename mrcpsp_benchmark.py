@@ -29,12 +29,12 @@ def process_instance(file_path: str, time_limit: int = None,
     s.verify()
     queue.put(s.get_statistics())
 
+
 def worker(args):
     file_path, time_limit = args
 
     queue = multiprocessing.Queue()
-    p = multiprocessing.Process(target=process_instance, args=(
-        file_path, time_limit, queue))
+    p = multiprocessing.Process(target=process_instance, args=(file_path, time_limit, queue))
     p.start()
 
     peak_memory = 0
@@ -63,18 +63,18 @@ def worker(args):
     instance_stats['memory_usage'] = round(peak_memory / (1024 ** 2), 5)
     return instance_stats
 
+
 def benchmark(data_set_name: str, time_limit: int = None, continue_from: str = None,
-              start: str = None, end: str = None, num_concurrent_processes: int = 1):
+              num_concurrent_processes: int = 1, save_interval_seconds: int = 60):
     """
     Benchmark a dataset using concurrent.futures.ProcessPoolExecutor.
-    If any process fails, terminate all and exit immediately.
+    Periodically exports partial results to avoid data loss from unexpected interruptions.
     """
     logging.info(f"Benchmarking dataset: {data_set_name}")
 
     start_time = timeit.default_timer()
 
     folder_path = Path(f"./data_set/mrcpsp/{data_set_name}/")
-
     files = [file.name for file in folder_path.iterdir() if file.is_file()]
 
     # Regex to capture x and y
@@ -89,6 +89,7 @@ def benchmark(data_set_name: str, time_limit: int = None, continue_from: str = N
 
     files.sort(key=extract_numbers)
 
+    # Load existing progress if continuing
     if continue_from is None:
         dataset_stats = pd.DataFrame(columns=[
             'name', 'lower_bound', 'upper_bound', 'variables', 'clauses',
@@ -103,14 +104,12 @@ def benchmark(data_set_name: str, time_limit: int = None, continue_from: str = N
         if file in dataset_stats['name'].values:
             logging.info(f"Skipping {file}, already processed.")
             continue
-
-        tasks.append((
-            f'{folder_path}/{file}',
-            time_limit
-        ))
+        tasks.append((f'{folder_path}/{file}', time_limit))
 
     executor = concurrent.futures.ProcessPoolExecutor(max_workers=num_concurrent_processes)
     futures = []
+
+    last_save_time = time.time()  # track time of last save
 
     try:
         for task in tasks:
@@ -123,12 +122,19 @@ def benchmark(data_set_name: str, time_limit: int = None, continue_from: str = N
                 dataset_stats = pd.concat([dataset_stats, pd.DataFrame([result])],
                                           ignore_index=True)
 
+                # Periodically save partial results
+                current_time = time.time()
+                if current_time - last_save_time >= save_interval_seconds:
+                    logging.info("Saving periodic partial results...")
+                    export_result(data_set_name, dataset_stats, suffix="partial")
+                    last_save_time = current_time
+
             except Exception as e:
                 logging.error(f"Worker failed: {e}")
                 for f in futures:
                     f.cancel()
                 executor.shutdown(wait=False, cancel_futures=True)
-                export_result(data_set_name, dataset_stats)
+                export_result(data_set_name, dataset_stats, suffix="crash")
                 sys.exit(1)
 
     except KeyboardInterrupt:
@@ -136,27 +142,38 @@ def benchmark(data_set_name: str, time_limit: int = None, continue_from: str = N
         for f in futures:
             f.cancel()
         executor.shutdown(wait=False, cancel_futures=True)
-        export_result(data_set_name, dataset_stats)
+        export_result(data_set_name, dataset_stats, suffix="interrupted")
         logging.info("Partial results exported after interruption.")
         sys.exit(1)
 
+    # Final export at the end
     export_result(data_set_name, dataset_stats)
     end = timeit.default_timer()
     logging.info(f"Benchmarking completed in {end - start_time:.2f} seconds.")
 
-def export_result(data_set_name, stat):
+
+def export_result(data_set_name, stat, suffix=None):
+    """
+    Export both detailed results and summary reports.
+    `suffix` is appended to the filename to indicate partial or crash saves.
+    """
     os.makedirs('./result', exist_ok=True)
-    stat.to_csv(
-        f'./result/{data_set_name}_STAIRCASE_{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv',
-        index=False)
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    suffix = f"_{suffix}" if suffix else ""
+
+    result_path = f'./result/{data_set_name}_STAIRCASE{suffix}_{timestamp}.csv'
+    report_path = f'./result/report_{data_set_name}_STAIRCASE{suffix}_{timestamp}.csv'
+
+    stat.to_csv(result_path, index=False)
+
     report = pd.DataFrame([{
-        'UNSATISFIABLE': stat['status'].str.contains('UNSATISFIABLE').sum(),
-        'SATISFIABLE': stat['status'].str.contains('SATISFIABLE').sum(),
-        'OPTIMAL': stat['status'].str.contains('OPTIMAL').sum(),
-        'UNKNOWN': stat['status'].str.contains('UNKNOWN').sum(),
-        'average_preprocessing_time': stat['preprocessing_time'].mean(),
-        'max_preprocessing_time': stat['preprocessing_time'].max(),
-        'min_preprocessing_time': stat['preprocessing_time'].min(),
+        'UNSATISFIABLE': stat['status'].str.fullmatch('UNSATISFIABLE').sum(),
+        'SATISFIABLE': stat['status'].str.fullmatch('SATISFIABLE').sum(),
+        'OPTIMAL': stat['status'].str.fullmatch('OPTIMAL').sum(),
+        'UNKNOWN': stat['status'].str.fullmatch('UNKNOWN').sum(),
+        'average_preprocessing_time': stat.get('preprocessing_time', pd.Series(dtype=float)).mean(),
+        'max_preprocessing_time': stat.get('preprocessing_time', pd.Series(dtype=float)).max(),
+        'min_preprocessing_time': stat.get('preprocessing_time', pd.Series(dtype=float)).min(),
         'average_encoding_time': stat['encoding_time'].mean(),
         "max_encoding_time": stat['encoding_time'].max(),
         "min_encoding_time": stat['encoding_time'].min(),
@@ -167,9 +184,8 @@ def export_result(data_set_name, stat):
         "max_memory_usage": stat['memory_usage'].max(),
         "min_memory_usage": stat['memory_usage'].min(),
     }])
-    report.T.reset_index().to_csv(
-        f'./result/report_{data_set_name}_STAIRCASE_{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv',
-        index=False)
+    report.T.reset_index().to_csv(report_path, index=False)
+    logging.info(f"Results exported to {result_path} and {report_path}")
 
 
 def main():
@@ -181,17 +197,15 @@ def main():
                         default=None)
     parser.add_argument('--cleanup', action='store_true',
                         help='Cleanup temporary files after execution.')
-    parser.add_argument('--start', type=str, default=None,
-                        help='Start instance name for processing.')
-    parser.add_argument('--end', type=str, default=None,
-                        help='End instance name for processing.')
     parser.add_argument('--num_concurrent_processes', type=int, default=1,
                         help='Number of concurrent processes to use for benchmarking.')
+    parser.add_argument('--save_interval_seconds', type=int, default=60,
+                        help='Interval (in seconds) between periodic partial result exports.')
 
     args = parser.parse_args()
     try:
-        benchmark(args.dataset_name, args.time_limit, args.continue_from, args.start,
-                  args.end, args.num_concurrent_processes)
+        benchmark(args.dataset_name, args.time_limit, args.continue_from,
+                  args.num_concurrent_processes, args.save_interval_seconds)
 
     finally:
         if args.cleanup:
@@ -201,6 +215,7 @@ def main():
                 shutil.rmtree('./dimacs')
             if os.path.exists('./eprime'):
                 shutil.rmtree('./eprime')
+
 
 if __name__ == "__main__":
     main()

@@ -163,10 +163,10 @@ def export_result(data_set_name, stat):
         f'./result/{data_set_name}_STAIRCASE_{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}.csv',
         index=False)
     report = pd.DataFrame([{
-        'UNSATISFIABLE': stat['status'].str.contains('UNSATISFIABLE').sum(),
-        'SATISFIABLE': stat['status'].str.contains('SATISFIABLE').sum(),
-        'OPTIMAL': stat['status'].str.contains('OPTIMAL').sum(),
-        'UNKNOWN': stat['status'].str.contains('UNKNOWN').sum(),
+        'UNSATISFIABLE': stat['status'].str.fullmatch('UNSATISFIABLE').sum(),
+        'SATISFIABLE': stat['status'].str.fullmatch('SATISFIABLE').sum(),
+        'OPTIMAL': stat['status'].str.fullmatch('OPTIMAL').sum(),
+        'UNKNOWN': stat['status'].str.fullmatch('UNKNOWN').sum(),
         'average_preprocessing_time': stat['preprocessing_time'].mean(),
         'max_preprocessing_time': stat['preprocessing_time'].max(),
         'min_preprocessing_time': stat['preprocessing_time'].min(),

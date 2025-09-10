@@ -251,13 +251,15 @@ class MRCPSPProblem:
     def reduce_non_renewable_resources_request_and_capacity(self):
         for k in range(self.__number_of_non_renewable_resources):
             self.non_renewable_resources_capacities[k] -= sum(min(
-                self.non_renewable_resources_request[i][o][k] for o in range(self.number_of_modes[i]))
+                self.non_renewable_resources_request[i][o][k] for o in
+                range(self.number_of_modes[i]))
                                                               for i in
-                                                              range(self.number_of_activities))
+                                                              range(1,
+                                                                    self.number_of_activities - 1))
 
-        for i in range(1, self.number_of_activities-1):
-            for o in range(self.number_of_modes[i]):
-                for k in range(self.__number_of_non_renewable_resources):
-                    self.non_renewable_resources_request[i][o][k] -= min(
-                        self.non_renewable_resources_request[i][o][k] for o in
-                        range(self.number_of_modes[i]))
+        for i in range(1, self.number_of_activities - 1):
+            for k in range(self.__number_of_non_renewable_resources):
+                min_demand = min(self.non_renewable_resources_request[i][o_prime][k]
+                                 for o_prime in range(self.number_of_modes[i]))
+                for o in range(self.number_of_modes[i]):
+                    self.non_renewable_resources_request[i][o][k] -= min_demand

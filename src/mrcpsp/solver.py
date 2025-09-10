@@ -41,6 +41,7 @@ class MRCPSPSolver:
             raise ValueError("The problem must be an instance of RCPSPProblem.")
 
         self.__problem = problem
+        self.__problem.reduce_non_renewable_resources_request_and_capacity()
 
         self.__lower_bound = 0
         self.__upper_bound = self.__calculate_bound()
@@ -115,7 +116,7 @@ class MRCPSPSolver:
                 i, mode = future.result()
                 chosen_modes[i] = mode
 
-        return RCPSPProblem.reduce_from_mrcpsp(self.__problem,chosen_modes)
+        return RCPSPProblem.reduce_from_mrcpsp(self.__problem, chosen_modes)
 
     def __calculate_bound(self):
         rcpsp_problem = self.__create_RCPSP_problem_from_MRCPSP()
@@ -126,7 +127,9 @@ class MRCPSPSolver:
         logging.info(
             'Calculating lower and upper bounds using the CPRU method...')
         start = timeit.default_timer()
-        horizon = 30000
+        horizon = sum(
+            max(self.__problem.durations[i][o] for o in range(self.__problem.number_of_modes[i]))
+            for i in range(1, self.__problem.number_of_activities - 1))
         tourn_factor = 0.5
         omega1 = 0.4
         omega2 = 0.6
@@ -341,8 +344,6 @@ class MRCPSPSolver:
 
     def __preprocessing(self):
         logging.info('Preprocessing started...')
-
-        self.__problem.reduce_non_renewable_resources_request_and_capacity()
 
         logging.info('Creating the extended precedence graph...')
         start = timeit.default_timer()

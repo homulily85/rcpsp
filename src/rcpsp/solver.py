@@ -590,7 +590,7 @@ class RCPSPSolver:
                 weights = []
                 for i in range(1, self.__problem.number_of_activities):
                     if t in range(self.__ES[i], self.__LC[i]) and self.__problem.requests[i][r] > 0:
-                        if self.__problem.requests[i][r]> self.__problem.capacities[r]:
+                        if self.__problem.requests[i][r] > self.__problem.capacities[r]:
                             self.__solver.add_clause([-self.__run[i, t]])
                             continue
                         literals.append(self.__run[i, t])
@@ -782,7 +782,15 @@ class RCPSPSolver:
                 - encoding_time: The time taken for encoding the problem.
                 - total_solving_time: The total time taken to solve the problem.
         """
-        t = self.__solver.get_statistics()
+        if not self.__failed_preprocessing:
+            t = self.__solver.get_statistics()
+        else:
+            t = {
+                'variables': 0,
+                'clauses': 0,
+                'total_solving_time': 0,
+            }
+
         return {
             'file_path': self.__problem.file_path,
             'lower_bound': self.__lower_bound,

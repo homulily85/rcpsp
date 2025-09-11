@@ -1,12 +1,16 @@
-from src.solver import Problem, RCPSPSolver
+from src.rcpsp.problem import RCPSPProblem
+from src.rcpsp.solver import RCPSPSolver
 
-p = Problem('data_set/pack/Pack037.rcp', 'pack')
-# p = Problem('data_set/pack_d/Pack_d002.rcp', 'pack')
-# p = Problem('data_set/data_set_test/test_2022.sm', 'psplib')
-# p = Problem('data_set/j90.sm/j9026_5.sm', 'psplib')
-s = RCPSPSolver(p, 'sat')
-s.encode()
-print(s.solve(find_optimal=True, time_limit=600))
-# print(s.get_schedule(get_graph=True, save_graph_to_file=True)[-1])
-s.verify()
-print(s.get_statistics())
+if __name__ == "__main__":
+    p = RCPSPProblem.from_file('data_set/rcpsp/pack/Pack001.rcp')
+    # p = RCPSPProblem('data_set/rcpsp/pack_d/Pack_d001.rcp')
+    # p = RCPSPProblem('data_set/rcpsp/test/test_2022.sm')
+    # p = RCPSPProblem('data_set/rcpsp/j30.sm/j302_10.sm')
+    # p = RCPSPProblem('data_set/rcpsp/j90.sm/j901_1.sm')
+    s = RCPSPSolver(p)
+    s.encode()
+    print(s.solve(find_optimal=True, time_limit=600))
+    print(s.get_schedule()[-1])
+    s.get_graph(save_to_a_file=True)
+    s.verify()
+    print(s.get_statistics())

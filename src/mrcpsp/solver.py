@@ -591,6 +591,9 @@ class MRCPSPSolver:
         g = self.__problem.precedence_graph.copy()
         schedule = self.get_schedule()
 
+        for e in g.edges:
+            g[e[0]][e[1]]['weight'] = self.__problem.durations[e[0]][schedule['modes'][e[0]]]
+
         # ---- Dynamically determine figure size ----
         try:
             levels = nx.algorithms.dag_longest_path_length(g) + 1

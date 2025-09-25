@@ -1,6 +1,4 @@
-import logging
 import os
-import timeit
 
 import networkx as nx
 from psplib import parse
@@ -25,12 +23,8 @@ class RCPSPProblem:
         """
         _, file_extension = os.path.splitext(file_path)
         if file_extension not in ['.sm', '.rcp']:
-            logging.critical('Unsupported input format. Supported formats are: .sm, .rcp')
             raise ValueError('Unsupported input format. Supported formats are: .sm, .rcp')
         file_path = os.path.abspath(file_path)
-        logging.info(
-            f"Parsing the problem instance from {file_path}")
-        start = timeit.default_timer()
 
         p = None
 
@@ -39,18 +33,14 @@ class RCPSPProblem:
         elif file_extension == '.rcp':
             p = RCPSPProblem.__rcp_parse(file_path)
 
-        logging.info(
-            f"Finished parsing the problem instance from {file_path}")
-        logging.info(f"Parsing time: {round(timeit.default_timer() - start, 5)} seconds.")
-
         return p
 
     def __init__(self, number_of_activities: int = None,
-                    number_of_resources: int = None,
-                    durations: list[int] = None,
-                    precedence_graph: nx.DiGraph = None,
-                    requests: list[list[int]] = None,
-                    capacities: list[int] = None):
+                 number_of_resources: int = None,
+                 durations: list[int] = None,
+                 precedence_graph: nx.DiGraph = None,
+                 requests: list[list[int]] = None,
+                 capacities: list[int] = None):
         """
         Initialize the problem instance.
         Args:
@@ -242,41 +232,3 @@ class RCPSPProblem:
                 problem.__precedence_graph.add_edge(i, successor, weight=problem.__durations[i])
 
         return problem
-
-    @staticmethod
-    def reduce_from_mrcpsp(mrcpsp_problem:'MRCPSPProblem', modes: list[int]) -> 'RCPSPProblem':
-        """
-        Reduce a Multi-Mode Resource-Constrained Project Scheduling Problem (MRCPSP) to a single-mode
-        RCPSP with renewable resources only.
-        Args:
-            mrcpsp_problem (MRCPSPProblem): The MRCPSP problem instance to reduce.
-            modes (list[int]): List of selected modes for each activity.
-
-        Returns:
-            RCPSPProblem: The reduced RCPSP problem instance.
-        Raises:
-            ValueError: If the number of modes does not match the number of activities in the MRCPSP problem.
-        """
-        if len(modes) != mrcpsp_problem.number_of_activities:
-            logging.critical("The number of modes must match the number of activities in the MRCPSP problem.")
-            raise ValueError("The number of modes must match the number of activities in the MRCPSP problem.")
-
-        rcpsp_problem = RCPSPProblem()
-        rcpsp_problem.__file_path = mrcpsp_problem.file_path
-        rcpsp_problem.__number_of_activities = mrcpsp_problem.number_of_activities
-        rcpsp_problem.__number_of_resources = mrcpsp_problem.number_of_renewable_resources
-        rcpsp_problem.__durations = [mrcpsp_problem.durations[i][modes[i]] for i in
-                                    range(rcpsp_problem.__number_of_activities)]
-        rcpsp_problem.__capacities = mrcpsp_problem.renewable_resources_capacities.copy()
-        rcpsp_problem.__precedence_graph = mrcpsp_problem.precedence_graph.copy()
-
-        for edge in rcpsp_problem.precedence_graph.edges():
-            i, j = edge
-            rcpsp_problem.precedence_graph[i][j]['weight'] = rcpsp_problem.durations[i]
-
-        rcpsp_problem.__requests = [
-            mrcpsp_problem.renewable_resources_request[i][modes[i]] for i in
-            range(rcpsp_problem.__number_of_activities)
-        ]
-
-        return rcpsp_problem

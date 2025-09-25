@@ -1,3 +1,4 @@
+networkx>=3.5
 psplib>=0.3.0
 python_sat>=1.8.dev16
 pypblib>=0.0.4

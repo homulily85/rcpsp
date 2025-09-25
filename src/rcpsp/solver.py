@@ -1,4 +1,3 @@
-import logging
 import math
 import os
 import random
@@ -7,18 +6,13 @@ import timeit
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from queue import Queue
 
-import networkx as nx
-from matplotlib import pyplot as plt
 from networkx.algorithms.dag import transitive_closure_dag
 from networkx.algorithms.shortest_paths.dense import floyd_warshall
 
 from src.rcpsp.problem import RCPSPProblem
-from src.utility.mics import get_project_root, generate_random_filename
-from src.utility.minium_path_cover import minimum_path_cover
 from src.utility.sat_solver import SATSolver, SOLVER_STATUS
 
 
-# noinspection PyTypeChecker
 class RCPSPSolver:
     """
     Class to solve the Resource-Constrained Project Scheduling Problem (RCPSP) using SAT solver.
@@ -39,18 +33,15 @@ class RCPSPSolver:
         self.__register = {}
 
         if not isinstance(problem, RCPSPProblem):
-            logging.critical("The problem must be an instance of RCPSPProblem.")
             raise ValueError("The problem must be an instance of RCPSPProblem.")
 
         self.__problem = problem
 
         if lower_bound is not None and upper_bound is not None:
             if lower_bound < 0 or upper_bound < 0:
-                logging.critical("Lower and upper bounds must be non-negative integers.")
                 raise ValueError("Lower and upper bounds must be non-negative integers.")
 
             if lower_bound > upper_bound:
-                logging.critical("Lower bound cannot be greater than upper bound.")
                 raise ValueError("Lower bound cannot be greater than upper bound.")
 
         if lower_bound is None or upper_bound is None:
@@ -72,8 +63,6 @@ class RCPSPSolver:
         self.__preprocessing()
 
     def __calculate_bound(self):
-        logging.info(
-            'Calculating lower and upper bounds using the CPRU method...')
         start = timeit.default_timer()
         horizon = 30000
         tourn_factor = 0.5
@@ -282,15 +271,11 @@ class RCPSPSolver:
             if 0 <= schedule[-1] < best_makespan:
                 best_makespan = schedule[-1]
 
-        logging.info(
-            f"Finished calculating lower and upper bounds in {round(timeit.default_timer() - start, 5)} seconds."
-        )
+        self.__preprocessing_time = timeit.default_timer() - start
         # For the lower bound we use the earliest start of end dummy activity
-        return min(horizon, best_makespan)
+        return ef[-1], min(horizon, best_makespan)
 
     def __preprocessing(self):
-        logging.info('Preprocessing started...')
-        logging.info('Creating the extended precedence graph...')
         start = timeit.default_timer()
         self.__extended_precedence_graph = transitive_closure_dag(self.__problem.precedence_graph)
 
@@ -302,11 +287,6 @@ class RCPSPSolver:
                 if weight != float('inf') and source != target:
                     self.__extended_precedence_graph[source][target]['weight'] = weight
 
-        logging.info(
-            f"Finished creating the extended precedence graph in {round(timeit.default_timer() - start, 5)} seconds.")
-
-        logging.info('Updating time lags using energetic reasoning on precedences...')
-        start = timeit.default_timer()
         for edge in self.__extended_precedence_graph.edges():
             i, j = edge
             self.__extended_precedence_graph[i][j]['weight'] = max(
@@ -314,12 +294,6 @@ class RCPSPSolver:
                 self.__problem.durations[i] + max([self.__rlb(i, j, k) for k in
                                                    range(self.__problem.number_of_resources)]))
 
-        logging.info(
-            f"Finished updating time lags in {round(timeit.default_timer() - start, 5)} seconds.")
-
-        logging.info(
-            'Calculating ES, EC, LS, and LC for each activity and creating necessary variables...')
-        start = timeit.default_timer()
         self.__ES = [self.__extended_precedence_graph[0][i]['weight'] for i in
                      range(1, self.__problem.number_of_activities)]
         self.__ES.insert(0, 0)
@@ -335,9 +309,6 @@ class RCPSPSolver:
 
         if not all(
                 self.__ES[i] <= self.__LS[i] for i in range(self.__problem.number_of_activities)):
-            logging.info(
-                "Preprocessing failed with given upper bound. "
-            )
             self.__failed_preprocessing = True
             return
 
@@ -354,10 +325,7 @@ class RCPSPSolver:
                            self.__LC[i]):  # t in RTW(i) (run time window of activity i)
                 self.__run[i, t] = self.__solver.create_new_variable()
 
-        self.__preprocessing_time = round(timeit.default_timer() - start, 5)
-        logging.info(
-            f"Finished calculating ES, EC, LS, and LC in {round(timeit.default_timer() - start, 5)} seconds.")
-        logging.info('Preprocessing finished.')
+        self.__preprocessing_time += (timeit.default_timer() - start)
 
     def __rlb(self, i, j, k) -> int:
         temp = 0
@@ -371,9 +339,9 @@ class RCPSPSolver:
     def encode(self):
         """
         Encode the problem instance into the solver's format.
+        This method must be called after initialization and before solving the problem.
 
         """
-        logging.info('Encoding the problem instance...')
         if self.__failed_preprocessing:
             return
 
@@ -382,13 +350,11 @@ class RCPSPSolver:
         self.__start_time_for_first_activity()
         self.__start_time_constraint()
         self.__precedence_constraint()
-        self.__resource_constraints_with_pbamo()
+        self.__resource_constraints()
         self.__consistency_constraint()
         self.__backpropagate_constraint()
 
-        self.__encoding_time = round(timeit.default_timer() - start, 5)
-
-        logging.info(f"Encoding finished in {self.__encoding_time} seconds.")
+        self.__encoding_time = timeit.default_timer() - start
 
     def solve(self, time_limit=None, find_optimal: bool = False) -> SOLVER_STATUS:
         """
@@ -453,9 +419,6 @@ class RCPSPSolver:
             return None
 
         if self.__schedule is None:
-            logging.info("Retrieving the schedule...")
-            start = timeit.default_timer()
-
             start_times = [-1 for _ in range(self.__problem.number_of_activities)]
 
             def get_start_time(activity: int) -> int:
@@ -485,9 +448,6 @@ class RCPSPSolver:
 
             self.__schedule = start_times
 
-            logging.info(
-                f"Schedule retrieved successfully in {round(timeit.default_timer() - start, 5)} seconds.")
-
         return self.__schedule
 
     def get_makespan(self) -> int | None:
@@ -502,134 +462,21 @@ class RCPSPSolver:
 
         return self.get_schedule()[-1]
 
-    def get_graph(self, save_to_a_file=False, width=None, height=None):
-        """
-        Generate and display or save a tree-like graph of the schedule.
-        Args:
-            save_to_a_file: If True, save the graph to a file instead of displaying it.
-            width: Width of the graph figure.
-            height: Height of the graph figure.
-        """
-        logging.info(f'Building the schedule graph...')
-        start = timeit.default_timer()
-
-        g = self.__problem.precedence_graph.copy()
-        schedule = self.get_schedule()
-
-        # ---- Dynamically determine figure size ----
-        try:
-            levels = nx.algorithms.dag_longest_path_length(g) + 1
-        except nx.NetworkXUnfeasible:
-            levels = int(len(g.nodes) ** 0.5)  # fallback if not a DAG
-
-        # Estimate width as max branching factor
-        level_count = {}
-        for node in nx.topological_sort(g):
-            depth = len(nx.ancestors(g, node))
-            level_count[depth] = level_count.get(depth, 0) + 1
-        max_width = max(level_count.values()) if level_count else 1
-
-        # Scale figure size (each node ~2.5x2.5 inches)
-        fig_w = (width if width else max(10, max_width * 2.5))
-        fig_h = (height if height else max(8, levels * 2.5))
-        plt.figure(figsize=(fig_w, fig_h))
-
-        # ---- Layout (tree-like with spacing tweaks) ----
-        pos = nx.nx_agraph.graphviz_layout(
-            g, prog="dot", args="-Granksep=2.0 -Gnodesep=0.25"
-        )
-
-        # Draw nodes
-        node_size = 1200
-        nx.draw_networkx_nodes(
-            g, pos, node_size=node_size, node_color="lightblue", edgecolors="black"
-        )
-        nx.draw_networkx_edges(g, pos, arrows=True, arrowstyle="->", arrowsize=20)
-
-        # Node labels = index
-        nx.draw_networkx_labels(
-            g, pos, labels={i: str(i) for i in g.nodes()}, font_weight="bold"
-        )
-
-        # Edge labels (if any)
-        edge_labels = nx.get_edge_attributes(g, "weight")
-        if edge_labels:
-            nx.draw_networkx_edge_labels(g, pos, edge_labels=edge_labels, font_color="red")
-
-        # ---- Schedule labels below nodes (dynamic offset) ----
-        # offset proportional to figure height & node size
-        y_range = max(y for _, y in pos.values()) - min(y for _, y in pos.values())
-        offset = max(-0.025 * y_range, -15)  # 5% of graph height
-        schedule_labels = {i: f"S({i}) = {schedule[i]}" for i in g.nodes()}
-        offset_pos = {node: (x, y + offset) for node, (x, y) in pos.items()}
-        nx.draw_networkx_labels(g, offset_pos, labels=schedule_labels, font_color="blue")
-
-        if save_to_a_file:
-            os.makedirs(os.path.join(get_project_root(), 'graphs'), exist_ok=True)
-            output_path = os.path.join(
-                get_project_root(), 'graphs', f'{generate_random_filename()}.png'
-            )
-            plt.savefig(output_path, bbox_inches="tight")
-            logging.info(f'Schedule graph saved to {output_path}')
-        else:
-            plt.show()
-
-        plt.close()
-        logging.info(
-            f'Schedule graph built successfully in {round(timeit.default_timer() - start, 5)} seconds.'
-        )
-
     def __start_time_for_first_activity(self):
         self.__solver.add_clause([self.__start[(0, 0)]])
 
-    def __resource_constraints_with_pbamo(self):
-        pb_clauses = []
+    def __resource_constraints(self):
         for t in range(self.__upper_bound):
             for r in range(self.__problem.number_of_resources):
                 literals = []
                 weights = []
                 for i in range(1, self.__problem.number_of_activities):
-                    if t in range(self.__ES[i], self.__LC[i]) and self.__problem.requests[i][r] > 0:
-                        if self.__problem.requests[i][r] > self.__problem.capacities[r]:
-                            self.__solver.add_clause([-self.__run[i, t]])
-                            continue
+                    if t in range(self.__ES[i], self.__LC[i]):
                         literals.append(self.__run[i, t])
                         weights.append(self.__problem.requests[i][r])
 
-                if sum(weights) > self.__problem.capacities[r]:
-                    pb_clauses.append((literals, weights, self.__problem.capacities[r]))
-
-            g = nx.DiGraph()
-            index_to_label = {}
-            label_to_index = {}
-            nodes = []
-            count = 0
-            for i in range(self.__problem.number_of_activities):
-                if t in range(self.__ES[i], self.__LC[i]):
-                    index_to_label[count] = i
-                    label_to_index[i] = count
-                    nodes.append(count)
-                    count += 1
-            g.add_nodes_from(nodes)
-
-            edges = []
-            for e in self.__extended_precedence_graph.edges:
-                if e[0] in label_to_index and e[1] in label_to_index:
-                    edges.append([label_to_index[e[0]], label_to_index[e[1]]])
-            g.add_edges_from(edges)
-
-            path_cover = minimum_path_cover(g.number_of_nodes(), g.edges)
-
-            og_path_cover = []
-
-            for path in path_cover:
-                og_path_cover.append([index_to_label[i] for i in path])
-
-            for p in og_path_cover:
-                pb_clauses.append(([self.__run[i, t] for i in p],
-                                   [1 for _ in p], 1))
-
-        self.__solver.add_pb_clauses(pb_clauses)
+                self.__solver.add_at_most_k(literals=literals, weights=weights,
+                                            k=self.__problem.capacities[r])
 
     def __consistency_constraint(self):
         for i in range(self.__problem.number_of_activities):
@@ -724,45 +571,6 @@ class RCPSPSolver:
 
         return self.__register[temp]
 
-    def verify(self):
-        """
-        Verify the solution of the problem.
-        This method checks if the solution satisfies all constraints, including precedence and resource constraints.
-        If any constraint is violated, it logs an error and exits the program.
-        """
-        # Get start time
-        solution = self.get_schedule()
-
-        if solution is None:
-            return
-
-        # Check precedence constraint
-        logging.info("Verifying the solution...")
-        start = timeit.default_timer()
-        for job in range(self.__problem.number_of_activities):
-            for predecessor in self.__problem.precedence_graph.predecessors(job):
-                if solution[job] < solution[predecessor] + self.__problem.durations[predecessor]:
-                    logging.error(
-                        f"Failed when checking precedence constraint for {predecessor} -> {job}")
-                    print(f"Failed when checking precedence constraint for {predecessor} -> {job}")
-                    exit(-1)
-
-        # Checking resource constraint
-        for t in range(solution[-1] + 1):
-            for r in range(self.__problem.number_of_resources):
-                total_consume = 0
-                for j in range(self.__problem.number_of_activities):
-                    if solution[j] <= t <= solution[j] + self.__problem.durations[j] - 1:
-                        total_consume += self.__problem.requests[j][r]
-                if total_consume > self.__problem.capacities[r]:
-                    logging.error(
-                        f"Failed when check resource constraint for resource {r} at t = {t}")
-                    print(f"Failed when check resource constraint for resource {r} at t = {t}")
-                    exit(-1)
-
-        logging.info("Solution verified successfully. All constraints are satisfied.")
-        logging.info(f"Verification time: {round(timeit.default_timer() - start, 5)} seconds.")
-
     def get_statistics(self) -> dict[str, int | float]:
         """
         Get the statistics of the solver.
@@ -802,6 +610,8 @@ class RCPSPSolver:
             'preprocessing_time': self.__preprocessing_time,
             'encoding_time': self.__encoding_time,
             'total_solving_time': t['total_solving_time'],
+            'time_used': self.__preprocessing_time + self.__encoding_time +
+                         t['total_solving_time']
         }
 
     def clear_interrupt(self):
